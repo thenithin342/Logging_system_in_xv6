@@ -6,7 +6,7 @@ Built on the x86 version of xv6, this project explores kernel memory safety, mul
 
 **Verified:** sanitizer tests for all three implementations, syscall/device and stress tests in 12 QEMU configurations, and 72 benchmark measurements across 1, 2, 4, and 8 emulated CPUs. [Test evidence](benchmarks/validation.log) · [Measured results](benchmarks/README.md) · [Demo transcript](benchmarks/demo-run.log)
 
-**Documentation:** [AMD interview guide](AMD_INTERVIEW_GUIDE.md) · [Live demo walkthrough](DEMO.md) · [Technical report](PROJECT_REPORT.md) · [Original xv6 documentation](xv6-public/README)
+**Documentation:** [Live demo walkthrough](DEMO.md) · [Technical report](PROJECT_REPORT.md) · [Original xv6 documentation](xv6-public/README)
 
 ## Project origin and contributions
 
@@ -97,7 +97,7 @@ The QEMU suite boots xv6, asserts the requested number of CPUs is detected, runs
 
 Mode 2 removes acquisition of the shared sequence spinlock. It still has ring spinlocks and a shared cache line for the sequence counter. Mode 0 keeps the same sequence allocator as mode 1 to isolate the change in buffer partitioning. Its retained capacity is smaller; overwrite counts must be interpreted with that difference in mind. `make KLOG_MODE=...` rebuilds the mode-sensitive objects automatically. Mode 3 is also available to disable emission at build time; it is not part of the correctness or performance comparison matrix.
 
-See [measured results and methodology](benchmarks/README.md), [raw measurements](benchmarks/results.csv), and [test transcripts](benchmarks/validation.log). These are QEMU/WSL measurements, with no claim about AMD hardware speed or production workloads.
+See [measured results and methodology](benchmarks/README.md), [raw measurements](benchmarks/results.csv), and [test transcripts](benchmarks/validation.log). These are QEMU/WSL measurements, with no claim about native hardware speed or production workloads.
 
 ![Measured enabled logging throughput versus emulated CPU count](benchmarks/throughput.png)
 
@@ -114,7 +114,6 @@ Median enabled workload throughput from three QEMU runs per configuration:
 
 Atomic sequencing improves the observed median in some configurations and regresses at four CPUs. All variants slow down at eight emulated CPUs. This is a useful systems result: changing one synchronization mechanism does not guarantee linear scaling or a universal speedup. The [full table](benchmarks/table.md) includes controls, observed ranges, latency, and overwrites. Throughput includes syscall validation, warmup, process lifecycle, and emulator scheduling; it is not isolated kernel insertion throughput.
 
-For interviews, the strongest discussion is the sequence of engineering decisions: finding a stack overflow, defining reader semantics, enforcing publication order, testing loss under concurrency, and measuring the tradeoff between shared locking and atomic cache-line contention. See the [AMD interview guide](AMD_INTERVIEW_GUIDE.md) for a short pitch, source walkthrough, technical questions, and accurate resume bullets.
 
 ## Scope and limits
 
@@ -125,4 +124,4 @@ For interviews, the strongest discussion is the sequence of engineering decision
 - Snapshot locking pauses writers; this is not a lock-free implementation or a production tracing subsystem.
 - The benchmark includes syscall, input validation, and timing overhead. Its P95 is the average of workers' sample P95 values, not a pooled P95.
 
-Read [the technical report](PROJECT_REPORT.md), [demo and interview notes](DEMO.md), and the original [xv6 README](xv6-public/README). `Documentation.pdf` is an inherited historical document and does not describe these changes; the current Markdown files and executable tests are authoritative.
+Read [the technical report](PROJECT_REPORT.md), [demo walkthrough](DEMO.md), and the original [xv6 README](xv6-public/README). `Documentation.pdf` is an inherited historical document and does not describe these changes; the current Markdown files and executable tests are authoritative.

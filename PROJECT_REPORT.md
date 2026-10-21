@@ -2,7 +2,7 @@
 
 ## Provenance and changes
 
-Starting point: repository `thenithin342/Logging_system_in_xv6`, commit `ee36653`, whose imported commits are attributed to Krishna Chaitanya. Existing xv6 and logging code are inherited work. The improvements in this version repair that implementation and add deterministic tests, a user logging syscall, a stress workload, and reproducible benchmark variants. Do not claim authorship of the upstream OS or original logging subsystem. Git history identifies the starting point and subsequent changes.
+Starting point: repository `thenithin342/Logging_system_in_xv6`, commit `ee36653`, whose imported commits are attributed to Krishna Chaitanya. Existing xv6 and logging code are inherited work. The improvements in this version repair that implementation and add deterministic tests, a user logging syscall, a stress workload, and reproducible benchmark variants. Git history identifies the starting point and subsequent changes.
 
 ## Safety and data format
 
@@ -36,4 +36,4 @@ On overwritten data, a reader resumes at the oldest retained sequence at or beyo
 
 `klog_bench` forks one worker per requested CPU, releases workers through a pipe barrier, warms each for 256 calls, and performs 16,384 calls per worker. It samples 128 evenly spaced serialized TSC intervals. It reports mean sample latency and each worker's P95, averaged over workers. Level `-1` supplies the no-emission control through the same validated syscall. The Python runner alternates control/emission order, repeats three times, records raw rows, and measures end-to-end wall throughput. Warmup, process startup, sampling, sorting, and teardown are included in that wall duration; it is not pure kernel insertion throughput. Guest ticks are retained without assuming their calibration.
 
-Read [the measured report](benchmarks/README.md) for results and variability. No measurements from QEMU establish a speedup on AMD silicon. Native hardware testing, persistent storage, access control, and sequence-epoch support remain outside this educational implementation.
+Read [the measured report](benchmarks/README.md) for results and variability. The QEMU measurements do not establish performance on native hardware. Native hardware testing, persistent storage, access control, and sequence-epoch support remain outside this educational implementation.
