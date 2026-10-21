@@ -16,7 +16,7 @@ int
 main(void)
 {
   static struct klog_entry entries[KLOG_MAX_ENTRIES], a, b;
-  int fd, other, shared, count, i, n;
+  int fd, other, shared, count, i, n, inherited[2], child;
   char longmsg[65];
   char *guard = (char*)(((uint)&fd & ~4095U) - 4096);
   check(sizeof(a) == 88, "entry ABI");
@@ -34,6 +34,15 @@ main(void)
   check(klogwrite(1, (void*)0xffffffff) == -1, "invalid string");
   check(klogwrite(1, "literal %d %s") == 0, "literal message");
   count = getklog(entries, KLOG_MAX_ENTRIES);
+  if(KLOG_MODE == 3){
+    check(count == 0 && klogdropped() == 0, "disabled emission");
+    mknod("klog", KLOG, 0);
+    fd = open("klog", O_RDONLY);
+    check(fd >= 0 && read(fd, &a, sizeof(a)) == 0, "disabled device EOF");
+    close(fd);
+    printf(1, "KLOG TEST PASS: disabled mode\n");
+    exit();
+  }
   check(count > 0, "snapshot nonempty");
   for(i = 1; i < count; i++)
     check(entries[i-1].seq < entries[i].seq, "ordered unique snapshot");
@@ -53,6 +62,22 @@ main(void)
   check(read(shared, &b, sizeof(b)) == sizeof(b) && b.seq > a.seq, "dup shares cursor");
   a = b;
   check(read(fd, &b, sizeof(b)) == sizeof(b) && b.seq > a.seq, "cursor advances");
+  check(pipe(inherited) == 0, "fork result pipe");
+  child = fork();
+  check(child >= 0, "fork reader");
+  if(child == 0){
+    close(inherited[0]);
+    check(read(fd, &a, sizeof(a)) == sizeof(a), "inherited descriptor read");
+    check(write(inherited[1], &a, sizeof(a)) == sizeof(a), "report child cursor");
+    close(inherited[1]);
+    exit();
+  }
+  close(inherited[1]);
+  check(read(inherited[0], &a, sizeof(a)) == sizeof(a), "receive child cursor");
+  close(inherited[0]);
+  check(wait() == child, "wait reader");
+  check(read(fd, &b, sizeof(b)) == sizeof(b) && b.seq > a.seq,
+        "fork shares cursor with parent");
   for(i = 0; i < 64; i++){
     n = read(fd, entries, sizeof(entries));
     check(n >= 0 && n % sizeof(a) == 0, "whole records");

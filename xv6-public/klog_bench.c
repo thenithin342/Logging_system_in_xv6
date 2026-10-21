@@ -10,8 +10,8 @@ struct result { uint mean, p95; };
 static uint
 cycles(void)
 {
-  uint lo, hi;
-  asm volatile("cpuid" : : "a"(0) : "ebx", "ecx", "edx", "memory");
+  uint lo, hi, leaf = 0;
+  asm volatile("cpuid" : "+a"(leaf) : : "ebx", "ecx", "edx", "memory");
   asm volatile("rdtsc" : "=a"(lo), "=d"(hi) : : "memory");
   return lo;
 }
@@ -21,7 +21,8 @@ main(int argc, char **argv)
 {
   int workers = argc > 1 ? atoi(argv[1]) : 1;
   int enabled = argc > 2 ? atoi(argv[2]) : 1;
-  int start[2], out[2], i, j, pid, begin, elapsed, dropped;
+  int start[2], out[2], i, j, pid, begin, elapsed;
+  uint dropped;
   uint samples[SAMPLES], t, mean = 0, p95 = 0;
   unsigned long long sum;
   struct result r;
@@ -93,7 +94,7 @@ main(int argc, char **argv)
   close(out[0]);
   for(i = 0; i < workers; i++)
     wait();
-  printf(1, "BENCH mode=%d workers=%d enabled=%d events=%d ticks=%d mean_cycles=%d mean_worker_p95=%d overwrites=%d\n",
-         KLOG_MODE, workers, enabled, workers*EVENTS, elapsed, mean, p95, dropped);
+  printf(1, "BENCH mode=%d workers=%d enabled=%d events=%d capacity=%d ticks=%d mean_cycles=%d mean_worker_p95=%d overwrites=%d\n",
+         KLOG_MODE, workers, enabled, workers*EVENTS, KLOG_MODE == 0 ? KLOG_GLOBAL_CAPACITY : workers*KLOG_BUF_SIZE, elapsed, mean, p95, dropped);
   exit();
 }
