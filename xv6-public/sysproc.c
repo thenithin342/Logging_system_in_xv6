@@ -107,24 +107,21 @@ sys_getklog(void)
   if(argint(1, &max_entries) < 0)
     return -1;
   
-  if(max_entries <= 0 || max_entries > 1024)
+  if(max_entries == 0)
+    return 0;
+  if(max_entries < 0 || max_entries > KLOG_MAX_ENTRIES)
     return -1;
   
   // Check if user buffer is valid
   if(buf_addr < 0 || buf_addr >= curproc->sz)
     return -1;
-  if(buf_addr + max_entries * sizeof(struct klog_entry) > curproc->sz)
+  if((uint)max_entries > (curproc->sz - (uint)buf_addr) / sizeof(struct klog_entry))
     return -1;
   
   // Allocate kernel buffer
   kbuf = (struct klog_entry*)kalloc();
   if(kbuf == 0)
     return -1;
-  
-  // Get snapshot (limited to one page worth)
-  int max_fit = PGSIZE / sizeof(struct klog_entry);
-  if(max_entries > max_fit)
-    max_entries = max_fit;
   
   count = klog_snapshot(kbuf, max_entries);
   
@@ -139,4 +136,36 @@ sys_getklog(void)
   
   kfree((char*)kbuf);
   return count;
+}
+
+// A bounded literal message; -1 measures the same syscall with logging disabled.
+int
+sys_klogwrite(void)
+{
+  int level, address, i;
+  char msg[64], *page;
+  uint va;
+  struct proc *p = myproc();
+  if(argint(0, &level) < 0 || level < -1 || level > KLOG_ERROR ||
+     argint(1, &address) < 0 || (uint)address >= p->sz)
+    return -1;
+  for(i = 0; i < sizeof(msg) && (uint)i < p->sz - (uint)address; i++){
+    va = (uint)address + i;
+    page = uva2ka(p->pgdir, (char*)PGROUNDDOWN(va));
+    if(page == 0)
+      return -1;
+    msg[i] = page[va % PGSIZE];
+    if(msg[i] == 0){
+      if(level >= 0)
+        klog_printf_level(level, "%s", msg);
+      return 0;
+    }
+  }
+  return -1;
+}
+
+int
+sys_klogdropped(void)
+{
+  return klog_get_dropped();
 }

@@ -1,0 +1,39 @@
+In file included from /mnt/c/Users/theni/OneDrive/Documents/projects/os_project/tests/klog_host.c:3:
+/mnt/c/Users/theni/OneDrive/Documents/projects/os_project/tests/../xv6-public/klogdev.c: In function ‘klogdev_write’:
+/mnt/c/Users/theni/OneDrive/Documents/projects/os_project/tests/../xv6-public/klogdev.c:47:29: warning: unused parameter ‘ip’ [-Wunused-parameter]
+   47 | klogdev_write(struct inode *ip, char *buf, int n)
+      |               ~~~~~~~~~~~~~~^~
+/mnt/c/Users/theni/OneDrive/Documents/projects/os_project/tests/../xv6-public/klogdev.c:47:39: warning: unused parameter ‘buf’ [-Wunused-parameter]
+   47 | klogdev_write(struct inode *ip, char *buf, int n)
+      |                                 ~~~~~~^~~
+/mnt/c/Users/theni/OneDrive/Documents/projects/os_project/tests/../xv6-public/klogdev.c:47:48: warning: unused parameter ‘n’ [-Wunused-parameter]
+   47 | klogdev_write(struct inode *ip, char *buf, int n)
+      |                                            ~~~~^
+HOST KLOG PASS: formatter, gaps, wraparound, cursors, 8 concurrent writers
+PASS host mode=0, including device allocation/copy failure cleanup
+In file included from /mnt/c/Users/theni/OneDrive/Documents/projects/os_project/tests/klog_host.c:3:
+/mnt/c/Users/theni/OneDrive/Documents/projects/os_project/tests/../xv6-public/klogdev.c: In function ‘klogdev_write’:
+/mnt/c/Users/theni/OneDrive/Documents/projects/os_project/tests/../xv6-public/klogdev.c:47:29: warning: unused parameter ‘ip’ [-Wunused-parameter]
+   47 | klogdev_write(struct inode *ip, char *buf, int n)
+      |               ~~~~~~~~~~~~~~^~
+/mnt/c/Users/theni/OneDrive/Documents/projects/os_project/tests/../xv6-public/klogdev.c:47:39: warning: unused parameter ‘buf’ [-Wunused-parameter]
+   47 | klogdev_write(struct inode *ip, char *buf, int n)
+      |                                 ~~~~~~^~~
+/mnt/c/Users/theni/OneDrive/Documents/projects/os_project/tests/../xv6-public/klogdev.c:47:48: warning: unused parameter ‘n’ [-Wunused-parameter]
+   47 | klogdev_write(struct inode *ip, char *buf, int n)
+      |                                            ~~~~^
+HOST KLOG PASS: formatter, gaps, wraparound, cursors, 8 concurrent writers
+PASS host mode=1, including device allocation/copy failure cleanup
+In file included from /mnt/c/Users/theni/OneDrive/Documents/projects/os_project/tests/klog_host.c:3:
+/mnt/c/Users/theni/OneDrive/Documents/projects/os_project/tests/../xv6-public/klogdev.c: In function ‘klogdev_write’:
+/mnt/c/Users/theni/OneDrive/Documents/projects/os_project/tests/../xv6-public/klogdev.c:47:29: warning: unused parameter ‘ip’ [-Wunused-parameter]
+   47 | klogdev_write(struct inode *ip, char *buf, int n)
+      |               ~~~~~~~~~~~~~~^~
+/mnt/c/Users/theni/OneDrive/Documents/projects/os_project/tests/../xv6-public/klogdev.c:47:39: warning: unused parameter ‘buf’ [-Wunused-parameter]
+   47 | klogdev_write(struct inode *ip, char *buf, int n)
+      |                                 ~~~~~~^~~
+/mnt/c/Users/theni/OneDrive/Documents/projects/os_project/tests/../xv6-public/klogdev.c:47:48: warning: unused parameter ‘n’ [-Wunused-parameter]
+   47 | klogdev_write(struct inode *ip, char *buf, int n)
+      |                                            ~~~~^
+HOST KLOG PASS: formatter, gaps, wraparound, cursors, 8 concurrent writers
+PASS host mode=2, including device allocation/copy failure cleanup

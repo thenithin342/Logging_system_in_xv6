@@ -1,0 +1,85 @@
+PASS mode=0 cpus=1: guest assertions and stress
+  run=1 enabled=0 events/s=41531
+  run=1 enabled=1 events/s=25304
+  run=2 enabled=1 events/s=24518
+  run=2 enabled=0 events/s=35825
+  run=3 enabled=0 events/s=33916
+  run=3 enabled=1 events/s=21905
+PASS mode=0 cpus=2: guest assertions and stress
+  run=1 enabled=0 events/s=47660
+  run=1 enabled=1 events/s=27465
+  run=2 enabled=1 events/s=33339
+  run=2 enabled=0 events/s=53819
+  run=3 enabled=0 events/s=48797
+  run=3 enabled=1 events/s=30359
+PASS mode=0 cpus=4: guest assertions and stress
+  run=1 enabled=0 events/s=37141
+  run=1 enabled=1 events/s=19479
+  run=2 enabled=1 events/s=29354
+  run=2 enabled=0 events/s=50667
+  run=3 enabled=0 events/s=50352
+  run=3 enabled=1 events/s=29939
+PASS mode=0 cpus=8: guest assertions and stress
+  run=1 enabled=0 events/s=14306
+  run=1 enabled=1 events/s=9026
+  run=2 enabled=1 events/s=9619
+  run=2 enabled=0 events/s=17476
+  run=3 enabled=0 events/s=18114
+  run=3 enabled=1 events/s=9178
+PASS mode=1 cpus=1: guest assertions and stress
+  run=1 enabled=0 events/s=38304
+  run=1 enabled=1 events/s=22831
+  run=2 enabled=1 events/s=23289
+  run=2 enabled=0 events/s=43755
+  run=3 enabled=0 events/s=40795
+  run=3 enabled=1 events/s=22378
+PASS mode=1 cpus=2: guest assertions and stress
+  run=1 enabled=0 events/s=56249
+  run=1 enabled=1 events/s=27832
+  run=2 enabled=1 events/s=28293
+  run=2 enabled=0 events/s=57423
+  run=3 enabled=0 events/s=57233
+  run=3 enabled=1 events/s=36434
+PASS mode=1 cpus=4: guest assertions and stress
+  run=1 enabled=0 events/s=33656
+  run=1 enabled=1 events/s=29707
+  run=2 enabled=1 events/s=29037
+  run=2 enabled=0 events/s=43635
+  run=3 enabled=0 events/s=38774
+  run=3 enabled=1 events/s=24762
+PASS mode=1 cpus=8: guest assertions and stress
+  run=1 enabled=0 events/s=14426
+  run=1 enabled=1 events/s=9558
+  run=2 enabled=1 events/s=8717
+  run=2 enabled=0 events/s=13686
+  run=3 enabled=0 events/s=11969
+  run=3 enabled=1 events/s=8760
+PASS mode=2 cpus=1: guest assertions and stress
+  run=1 enabled=0 events/s=35231
+  run=1 enabled=1 events/s=26876
+  run=2 enabled=1 events/s=25541
+  run=2 enabled=0 events/s=39961
+  run=3 enabled=0 events/s=39815
+  run=3 enabled=1 events/s=29600
+PASS mode=2 cpus=2: guest assertions and stress
+  run=1 enabled=0 events/s=49033
+  run=1 enabled=1 events/s=32181
+  run=2 enabled=1 events/s=43713
+  run=2 enabled=0 events/s=57162
+  run=3 enabled=0 events/s=64518
+  run=3 enabled=1 events/s=42364
+PASS mode=2 cpus=4: guest assertions and stress
+  run=1 enabled=0 events/s=38842
+  run=1 enabled=1 events/s=23482
+  run=2 enabled=1 events/s=24927
+  run=2 enabled=0 events/s=38097
+  run=3 enabled=0 events/s=39260
+  run=3 enabled=1 events/s=25933
+PASS mode=2 cpus=8: guest assertions and stress
+  run=1 enabled=0 events/s=16513
+  run=1 enabled=1 events/s=10893
+  run=2 enabled=1 events/s=10660
+  run=2 enabled=0 events/s=14608
+  run=3 enabled=0 events/s=16991
+  run=3 enabled=1 events/s=13043
+ALL QEMU CHECKS PASS

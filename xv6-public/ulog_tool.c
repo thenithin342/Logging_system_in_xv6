@@ -13,14 +13,14 @@ main(int argc, char *argv[])
   const char *level;
   
   // Allocate buffer on heap instead of stack
-  entries = (struct klog_entry*)malloc(64 * sizeof(struct klog_entry));
+  entries = (struct klog_entry*)malloc(KLOG_MAX_ENTRIES * sizeof(struct klog_entry));
   if(entries == 0){
     printf(2, "malloc failed\n");
     exit();
   }
   
   // Get kernel log snapshot
-  count = getklog(entries, 64);
+  count = getklog(entries, KLOG_MAX_ENTRIES);
   
   if(count < 0){
     printf(2, "getklog failed\n");

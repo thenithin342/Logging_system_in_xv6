@@ -79,7 +79,8 @@ sys_read(void)
     return -1;
   result = fileread(f, p, n);
   // Only log significant reads (>= 64 bytes) to avoid flooding
-  if(result >= 64)
+  if(result >= 64 && !(f->type == FD_INODE &&
+       f->ip->type == T_DEV && f->ip->major == KLOG))
     klog_debug("read: %d bytes", result);
   return result;
 }

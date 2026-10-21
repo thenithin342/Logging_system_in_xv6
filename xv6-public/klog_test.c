@@ -1,85 +1,71 @@
-// Test program for kernel logging system
 #include "types.h"
 #include "stat.h"
 #include "user.h"
 #include "fcntl.h"
 
-void
-test_getklog(void)
+static void
+check(int ok, char *what)
 {
-  struct klog_entry *entries;
-  int count, i;
-  
-  printf(1, "Testing getklog() syscall...\n");
-  
-  // Allocate buffer on heap
-  entries = (struct klog_entry*)malloc(32 * sizeof(struct klog_entry));
-  if(entries == 0){
-    printf(2, "ERROR: malloc failed\n");
-    return;
+  if(!ok){
+    printf(1, "KLOG TEST FAIL: %s\n", what);
+    exit();
   }
-  
-  // Trigger some kernel activity
-  fork();
-  wait();
-  
-  // Get logs
-  count = getklog(entries, 32);
-  
-  if(count < 0){
-    printf(2, "ERROR: getklog() failed\n");
-    free(entries);
-    return;
-  }
-  
-  printf(1, "Retrieved %d log entries:\n", count);
-  for(i = 0; i < count && i < 10; i++){
-    printf(1, "  [%d] CPU%d PID%d: %s\n",
-           entries[i].seq, entries[i].cpu, entries[i].pid, entries[i].msg);
-  }
-  if(count > 10)
-    printf(1, "  ... and %d more entries\n", count - 10);
-  
-  free(entries);
-}
-
-void
-test_klog_device(void)
-{
-  int fd;
-  struct klog_entry entry;
-  int n, count = 0;
-  
-  printf(1, "\nTesting /dev/klog device...\n");
-  
-  // Create the device node if it doesn't exist
-  mknod("klog", 2, KLOG);
-  
-  fd = open("klog", O_RDONLY);
-  if(fd < 0){
-    printf(2, "ERROR: Cannot open /dev/klog\n");
-    return;
-  }
-  
-  // Read some entries
-  while(count < 5 && (n = read(fd, &entry, sizeof(entry))) == sizeof(entry)){
-    printf(1, "  [%d] CPU%d PID%d: %s\n",
-           entry.seq, entry.cpu, entry.pid, entry.msg);
-    count++;
-  }
-  
-  close(fd);
-  printf(1, "Read %d entries from device\n", count);
 }
 
 int
-main(int argc, char *argv[])
+main(void)
 {
-  printf(1, "=== Kernel Logging System Test ===\n\n");
-  
-  test_getklog();
-  test_klog_device();
-  
-  printf(1, "\n=== Test Complete ===\n");
+  static struct klog_entry entries[KLOG_MAX_ENTRIES], a, b;
+  int fd, other, shared, count, i, n;
+  char longmsg[65];
+  char *guard = (char*)(((uint)&fd & ~4095U) - 4096);
+  check(sizeof(a) == 88, "entry ABI");
+  check(getklog(entries, 0) == 0, "zero length");
+  check(getklog(entries, -1) == -1, "negative length");
+  check(getklog(entries, KLOG_MAX_ENTRIES+1) == -1, "explicit page limit");
+  check(getklog((void*)0xfffffff0, 1) == -1, "overflow pointer");
+  check(getklog((void*)sbrk(0), 1) == -1, "past process end");
+  check(getklog((void*)guard, 1) == -1, "guard snapshot destination");
+  check(klogwrite(1, guard) == -1, "guard source string");
+  memset(longmsg, 'x', sizeof(longmsg));
+  longmsg[64] = 0;
+  check(klogwrite(1, longmsg) == -1, "overlong string");
+  check(klogwrite(4, "bad") == -1, "invalid level");
+  check(klogwrite(1, (void*)0xffffffff) == -1, "invalid string");
+  check(klogwrite(1, "literal %d %s") == 0, "literal message");
+  count = getklog(entries, KLOG_MAX_ENTRIES);
+  check(count > 0, "snapshot nonempty");
+  for(i = 1; i < count; i++)
+    check(entries[i-1].seq < entries[i].seq, "ordered unique snapshot");
+  check(strcmp(entries[count-1].msg, "literal %d %s") == 0, "no format injection");
+  mknod("klog", KLOG, 0);
+  fd = open("klog", O_RDONLY);
+  other = open("klog", O_RDONLY);
+  check(fd >= 0 && other >= 0, "open independent readers");
+  check(read(fd, &a, 0) == 0, "zero device read");
+  check(read(fd, &a, sizeof(a)-1) == -1, "short device read");
+  check(read(fd, (void*)0xfffffff0, sizeof(a)) == -1, "invalid device destination");
+  check(read(fd, &a, sizeof(a)) == sizeof(a), "first read");
+  check(read(other, &b, sizeof(b)) == sizeof(b), "independent first read");
+  check(a.seq == b.seq, "independent cursors");
+  shared = dup(fd);
+  check(shared >= 0, "dup reader");
+  check(read(shared, &b, sizeof(b)) == sizeof(b) && b.seq > a.seq, "dup shares cursor");
+  a = b;
+  check(read(fd, &b, sizeof(b)) == sizeof(b) && b.seq > a.seq, "cursor advances");
+  for(i = 0; i < 64; i++){
+    n = read(fd, entries, sizeof(entries));
+    check(n >= 0 && n % sizeof(a) == 0, "whole records");
+    if(n == 0)
+      break;
+  }
+  check(i < 64, "log reads reach end without generating logs");
+  check(klogwrite(1, "after eof") == 0, "append after eof");
+  check(read(fd, &a, sizeof(a)) == sizeof(a) && strcmp(a.msg, "after eof") == 0,
+        "read resumes after eof");
+  close(shared);
+  close(fd);
+  close(other);
+  printf(1, "KLOG TEST PASS\n");
   exit();
 }

@@ -79,7 +79,7 @@ uint            klog_get_dropped(void);
 
 // klogdev.c
 void            klogdev_init(void);
-int             klogdev_read(struct inode*, char*, int);
+int             klogdev_read(struct file*, char*, int);
 int             klogdev_write(struct inode*, char*, int);
 
 // kbd.c

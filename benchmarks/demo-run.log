@@ -1,0 +1,71 @@
+c[?7l[2J[0mSeaBIOS (version 1.16.3-debian-1.16.3-2)
+
+
+iPXE (https://ipxe.org) 00:03.0 CA00 PCI2.10 PnP PMM+1EFCAF60+1EF0AF60 CA00
+Press Ctrl-B to configure iPXE (PCI 00:03.0)...                                                                               
+
+
+Booting from Hard Disk..xv6...
+klog: detected 4 CPUs
+cpu1: starting 1
+cpu2: starting 2
+cpu3: starting 3
+cpu0: starting 0
+sb: size 1000 nblocks 941 ninodes 200 nlog 30 logstart 2 inodestart 32 bmap start 58
+init: starting sh
+$ klog_test
+KLOG TEST PASS
+$ klog_stress
+KLOG STRESS PASS: 18000 writes, concurrent snapshots and readers, overwrites=17016
+$ ulog_tool
+Kernel Log (46 entries):
+----------------------------------------
+[17998] INFO CPU0 PID8: stress writer
+[17999] INFO CPU0 PID8: stress writer
+[18000] INFO CPU1 PID7: stress writer
+[18001] INFO CPU0 PID8: stress writer
+[18002] INFO CPU1 PID7: stress writer
+[18003] INFO CPU1 PID7: stress writer
+[18004] INFO CPU1 PID7: stress writer
+[18005] INFO CPU0 PID8: stress writer
+[18006] INFO CPU1 PID7: stress writer
+[18007] INFO CPU1 PID7: stress writer
+[18008] INFO CPU1 PID7: stress writer
+[18009] INFO CPU2 PID8: stress writer
+[18010] INFO CPU1 PID7: stress writer
+[18011] INFO CPU2 PID8: stress writer
+[18012] INFO CPU1 PID7: stress writer
+[18013] INFO CPU2 PID8: stress writer
+[18014] INFO CPU1 PID7: stress writer
+[18015] INFO CPU2 PID8: stress writer
+[18016] INFO CPU1 PID7: stress writer
+[18017] INFO CPU2 PID8: stress writer
+[18018] INFO CPU1 PID7: stress writer
+[18019] INFO CPU1 PID7: stress writer
+[18020] INFO CPU2 PID8: stress writer
+[18021] INFO CPU2 PID8: stress writer
+[18022] INFO CPU1 PID7: stress writer
+[18023] INFO CPU2 PID8: stress writer
+[18024] INFO CPU1 PID7: stress writer
+[18025] INFO CPU2 PID8: stress writer
+[18026] INFO CPU1 PID7: stress writer
+[18027] INFO CPU2 PID8: stress writer
+[18028] INFO CPU1 PID7: stress writer
+[18029] INFO CPU2 PID8: stress writer
+[18030] INFO CPU1 PID7: stress writer
+[18031] INFO CPU2 PID8: stress writer
+[18032] INFO CPU1 PID7: stress writer
+[18033] INFO CPU1 PID7: stress writer
+[18034] INFO CPU1 PID7: stress writer
+[18035] INFO CPU1 PID7: stress writer
+[18036] INFO CPU1 PID7: stress writer
+[18037] INFO CPU1 PID7: stress writer
+[18038] INFO CPU1 PID7: stress writer
+[18039] INFO CPU2 PID8: exit: pid 8 exiting
+[18040] INFO CPU1 PID7: exit: pid 7 exiting
+[18041] INFO CPU0 PID4: exit: pid 4 exiting
+[18042] INFO CPU3 PID2: fork: pid 2 created child 13
+[18043] INFO CPU0 PID13: exec: ulog_tool
+$ klog_bench 4 1
+BENCH mode=2 workers=4 enabled=1 events=65536 ticks=219 mean_cycles=354566 mean_worker_p95=916682 overwrites=66563
+$ 

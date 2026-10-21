@@ -1,17 +1,22 @@
 // Kernel logging subsystem implementation
+#ifdef KLOG_HOST_TEST
+#include "../tests/klog_host.h"
+#else
 #include "types.h"
 #include "defs.h"
 #include "param.h"
 #include "mmu.h"
 #include "proc.h"
 #include "x86.h"
+#endif
+#include <stdarg.h>
 #include "klog.h"
 
 // Per-CPU log buffers
 static struct klog_cpu_buf cpu_logs[NCPU];
 
 // Global sequence counter
-static uint global_seq = 0;
+static uint global_seq = 1;
 static struct spinlock seq_lock;
 
 // Get high-resolution timestamp (using TSC)
@@ -28,11 +33,19 @@ get_timestamp(uint *hi, uint *lo)
 static uint
 next_seq(void)
 {
+#if KLOG_MODE != 2
   uint seq;
+#endif
+#if KLOG_MODE == 2
+  return __sync_fetch_and_add(&global_seq, 1);
+#else
   acquire(&seq_lock);
   seq = global_seq++;
   release(&seq_lock);
+#endif
+#if KLOG_MODE != 2
   return seq;
+#endif
 }
 
 // Initialize kernel logging subsystem
@@ -46,6 +59,7 @@ klog_init(void)
   for(i = 0; i < NCPU; i++){
     initlock(&cpu_logs[i].lock, "klog_cpu");
     cpu_logs[i].head = 0;
+    cpu_logs[i].count = 0;
     cpu_logs[i].dropped = 0;
   }
   
@@ -58,22 +72,19 @@ snprintf_int(char *buf, int size, int val)
 {
   char tmp[16];
   int i = 0, j = 0;
-  int neg = 0;
+  int neg = val < 0;
+  uint magnitude = neg ? 0U - (uint)val : (uint)val;
   
   if(size <= 0)
     return 0;
   
-  if(val < 0){
-    neg = 1;
-    val = -val;
-  }
   
-  if(val == 0){
+  if(magnitude == 0){
     tmp[i++] = '0';
   } else {
-    while(val > 0 && i < sizeof(tmp)){
-      tmp[i++] = '0' + (val % 10);
-      val /= 10;
+    while(magnitude > 0 && i < sizeof(tmp)){
+      tmp[i++] = '0' + (magnitude % 10);
+      magnitude /= 10;
     }
   }
   
@@ -119,7 +130,7 @@ snprintf_hex(char *buf, int size, uint val)
 
 // Internal logging function with level
 static void
-klog_printf_internal(int level, const char *fmt, uint *ap)
+klog_printf_internal(int level, const char *fmt, va_list ap)
 {
   int cpu_id;
   struct klog_cpu_buf *log;
@@ -130,6 +141,9 @@ klog_printf_internal(int level, const char *fmt, uint *ap)
   int i;
   char *s;
   
+  if(KLOG_MODE == 3)
+    return;
+
   // Get current CPU
   pushcli();
   cpu_id = cpuid();
@@ -138,7 +152,7 @@ klog_printf_internal(int level, const char *fmt, uint *ap)
     return;
   }
   
-  log = &cpu_logs[cpu_id];
+  log = &cpu_logs[KLOG_MODE == 0 ? 0 : cpu_id];
   
   // Get current process ID if available
   if(myproc())
@@ -156,13 +170,13 @@ klog_printf_internal(int level, const char *fmt, uint *ap)
       break;
     switch(*fmt){
     case 'd':
-      i += snprintf_int(buf + i, sizeof(buf) - i, *ap++);
+      i += snprintf_int(buf + i, sizeof(buf) - i, va_arg(ap, int));
       break;
     case 'x':
-      i += snprintf_hex(buf + i, sizeof(buf) - i, *ap++);
+      i += snprintf_hex(buf + i, sizeof(buf) - i, va_arg(ap, uint));
       break;
     case 's':
-      s = (char*)*ap++;
+      s = va_arg(ap, char*);
       if(s == 0)
         s = "(null)";
       for(; *s && i < sizeof(buf)-1; s++)
@@ -173,7 +187,8 @@ klog_printf_internal(int level, const char *fmt, uint *ap)
       break;
     default:
       buf[i++] = '%';
-      buf[i++] = *fmt;
+      if(i < sizeof(buf)-1)
+        buf[i++] = *fmt;
       break;
     }
   }
@@ -191,12 +206,18 @@ klog_printf_internal(int level, const char *fmt, uint *ap)
   entry->pid = pid;
   entry->level = level;
   
+  // Zero padding prevents stale ring contents from reaching user space.
+  memset(entry->msg, 0, sizeof(entry->msg));
   // Copy message
   for(i = 0; i < sizeof(entry->msg)-1 && buf[i]; i++)
     entry->msg[i] = buf[i];
   entry->msg[i] = 0;
   
-  log->head++;
+  log->head = (log->head + 1) % KLOG_BUF_SIZE;
+  if(log->count == KLOG_BUF_SIZE)
+    log->dropped++;
+  else
+    log->count++;
   
   release(&log->lock);
   popcli();
@@ -206,96 +227,107 @@ klog_printf_internal(int level, const char *fmt, uint *ap)
 void
 klog_printf(const char *fmt, ...)
 {
-  uint *ap = (uint*)(void*)&fmt + 1;
+  va_list ap;
+  va_start(ap, fmt);
   klog_printf_internal(KLOG_INFO, fmt, ap);
+  va_end(ap);
 }
 
 // Log a formatted message with specific level
 void
 klog_printf_level(int level, const char *fmt, ...)
 {
-  uint *ap = (uint*)(void*)&fmt + 1;
+  va_list ap;
+  va_start(ap, fmt);
   klog_printf_internal(level, fmt, ap);
+  va_end(ap);
 }
 
-// Snapshot all logs into user buffer - returns LAST (most recent) entries
+// Lock order: CPU rings in ascending order, then (writers only) seq_lock.
+// Holding every ring gives a point-in-time view of published entries.
+static void
+lock_logs(void)
+{
+  int i;
+  for(i = 0; i < NCPU; i++)
+    acquire(&cpu_logs[i].lock);
+}
+
+static void
+unlock_logs(void)
+{
+  int i;
+  for(i = NCPU-1; i >= 0; i--)
+    release(&cpu_logs[i].lock);
+}
+
+// Merge actual retained sequences, including gaps from independent overwrites.
+// shortcut: uint sequence IDs last until wrap; reboot before 2^32 events.
+static int
+collect(struct klog_entry *buf, int max, uint *cursor)
+{
+  uint pos[NCPU], index, seq;
+  int cpu, best, count = 0, i;
+  struct klog_cpu_buf *log;
+  if(max <= 0)
+    return 0;
+  if(max > KLOG_MAX_ENTRIES)
+    max = KLOG_MAX_ENTRIES;
+  lock_logs();
+  for(cpu = 0; cpu < NCPU; cpu++)
+    pos[cpu] = 0;
+  while(count < max){
+    best = -1;
+    seq = cursor ? ~0U : 0;
+    for(cpu = 0; cpu < NCPU; cpu++){
+      log = &cpu_logs[cpu];
+      while(pos[cpu] < log->count){
+        index = cursor ? log->head + KLOG_BUF_SIZE - log->count + pos[cpu]
+                       : log->head + KLOG_BUF_SIZE - 1 - pos[cpu];
+        index %= KLOG_BUF_SIZE;
+        if(cursor && log->entries[index].seq < *cursor){
+          pos[cpu]++;
+          continue;
+        }
+        if(best < 0 || (cursor ? log->entries[index].seq < seq
+                              : log->entries[index].seq > seq)){
+          best = cpu;
+          seq = log->entries[index].seq;
+        }
+        break;
+      }
+    }
+    if(best < 0)
+      break;
+    log = &cpu_logs[best];
+    index = cursor ? log->head + KLOG_BUF_SIZE - log->count + pos[best]
+                   : log->head + KLOG_BUF_SIZE - 1 - pos[best];
+    buf[count++] = log->entries[index % KLOG_BUF_SIZE];
+    pos[best]++;
+  }
+  if(cursor && count)
+    *cursor = buf[count-1].seq + 1;
+  unlock_logs();
+  if(!cursor){
+    for(i = 0; i < count/2; i++){
+      struct klog_entry tmp = buf[i];
+      buf[i] = buf[count-1-i];
+      buf[count-1-i] = tmp;
+    }
+  }
+  return count;
+}
+
 int
 klog_snapshot(struct klog_entry *buf, int max_entries)
 {
-  int cpu_id, count = 0, total = 0;
-  struct klog_cpu_buf *log;
-  uint start, end, i, idx, j;
-  uint min_seq = 0xFFFFFFFF;
-  int skip_count = 0;
-  
-  // First pass: count total entries and find minimum sequence number
-  for(cpu_id = 0; cpu_id < NCPU; cpu_id++){
-    log = &cpu_logs[cpu_id];
-    acquire(&log->lock);
-    
-    if(log->head > KLOG_BUF_SIZE){
-      total += KLOG_BUF_SIZE;
-      // Find minimum sequence in this buffer
-      for(i = 0; i < KLOG_BUF_SIZE; i++){
-        if(log->entries[i].seq < min_seq)
-          min_seq = log->entries[i].seq;
-      }
-    } else {
-      total += log->head;
-      // Find minimum sequence in this buffer
-      for(i = 0; i < log->head; i++){
-        if(log->entries[i].seq < min_seq)
-          min_seq = log->entries[i].seq;
-      }
-    }
-    
-    release(&log->lock);
-  }
-  
-  // Calculate how many entries to skip (if total > max_entries, skip oldest)
-  if(total > max_entries){
-    skip_count = total - max_entries;
-  }
-  
-  // Second pass: collect entries, skipping the oldest ones
-  for(cpu_id = 0; cpu_id < NCPU; cpu_id++){
-    log = &cpu_logs[cpu_id];
-    
-    acquire(&log->lock);
-    
-    // Determine range to copy
-    if(log->head > KLOG_BUF_SIZE){
-      start = log->head - KLOG_BUF_SIZE;
-      end = log->head;
-    } else {
-      start = 0;
-      end = log->head;
-    }
-    
-    // Copy entries, skipping based on sequence number
-    for(i = start; i < end && count < max_entries; i++){
-      idx = i % KLOG_BUF_SIZE;
-      // Skip entries with sequence numbers in the skip range
-      if(log->entries[idx].seq >= min_seq + skip_count){
-        buf[count++] = log->entries[idx];
-      }
-    }
-    
-    release(&log->lock);
-  }
-  
-  // Sort by sequence number (simple bubble sort)
-  for(i = 0; i < count - 1; i++){
-    for(j = 0; j < count - i - 1; j++){
-      if(buf[j].seq > buf[j+1].seq){
-        struct klog_entry t = buf[j];
-        buf[j] = buf[j+1];
-        buf[j+1] = t;
-      }
-    }
-  }
-  
-  return count;
+  return collect(buf, max_entries, 0);
+}
+
+int
+klog_read_since(struct klog_entry *buf, int max_entries, uint *cursor)
+{
+  return collect(buf, max_entries, cursor);
 }
 
 // Clear all logs
@@ -305,13 +337,14 @@ klog_clear(void)
   int cpu_id;
   struct klog_cpu_buf *log;
   
+  lock_logs();
   for(cpu_id = 0; cpu_id < NCPU; cpu_id++){
     log = &cpu_logs[cpu_id];
-    acquire(&log->lock);
     log->head = 0;
+    log->count = 0;
     log->dropped = 0;
-    release(&log->lock);
   }
+  unlock_logs();
 }
 
 // Get total dropped count

@@ -25,16 +25,11 @@ int sleep(int);
 int uptime(void);
 
 // Kernel logging
-struct klog_entry {
-  unsigned int seq;
-  unsigned int timestamp_hi;
-  unsigned int timestamp_lo;
-  unsigned int cpu;
-  unsigned int pid;
-  unsigned int level;
-  char msg[64];
-};
+#define KLOG_USER
+#include "klog.h"
 int getklog(struct klog_entry*, int);
+int klogwrite(int, const char*);
+int klogdropped(void);
 
 // ulib.c
 int stat(const char*, struct stat*);

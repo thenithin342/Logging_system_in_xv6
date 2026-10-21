@@ -1,148 +1,39 @@
-# Kernel Logging System
+# Demo and interview preparation
 
+For the project pitch, source walkthrough, AMD systems topics, and resume wording, read [AMD_INTERVIEW_GUIDE.md](AMD_INTERVIEW_GUIDE.md).
 
-### Setup
-```bash
-cd xv6-public
-make qemu-nox
-```
+From Linux/WSL, run `cd xv6-public && make qemu-nox CPUS=4`.
+The boot line must say `klog: detected 4 CPUs` before discussing multicore results.
 
----
+1. Run `klog_test`. Explain the assertions behind `KLOG TEST PASS`: invalid pointers and guard pages, explicit page limit, independent opens, shared `dup` cursor, EOF, and resuming after a new event.
+2. Run `klog_stress`. Show `KLOG STRESS PASS`: 18,000 explicit writes, concurrent readers, snapshots, wraparound, and overwrite accounting.
+3. Run `ulog_tool`. Explain sequence, CPU, PID, level, and message. Sequence numbers establish order; TSC fields hold raw cycles.
+4. Run `klog_bench 4 0`, then `klog_bench 4 1`. The first validates input without emitting. Explain that both include syscall and timing overhead.
+5. Show `benchmarks/results.csv` and `benchmarks/throughput.png`. Discuss variability and QEMU limits. Use the recorded data rather than promising linear scaling.
+6. Exit QEMU with Ctrl+A, then X.
 
-## Demo Flow
+For a reproducible external run, use `python3 tests/run_host.py` and `python3 tests/run_qemu.py --benchmark` from the repository root. See the root README for prerequisites.
 
-### 1. Show Initial Boot Logs
+## Questions to prepare
 
-**Action:**
-```bash
-$ ulog_tool
-```
+**Why per-CPU rings?** They partition the write lock and storage. A shared sequence counter still creates cross-CPU traffic, and consistent snapshots briefly lock all rings.
 
-**Expected Output:**
-```
-Kernel Log (3 entries):
-----------------------------------------
-[0] INFO CPU0 PID0: klog: logging subsystem initialized
-[1] INFO CPU0 PID1: exec: sh
-[2] INFO CPU0 PID1: fork: pid 1 created child 2
-```
+**Spinlock versus mutex?** A spinlock waits by retrying and is appropriate for short kernel critical sections where sleeping is forbidden. A sleep lock yields while waiting. xv6 ring locks disable local interrupts; device reads are serialized under the inode sleep lock, allowing temporary allocation and normal filesystem locking behavior.
 
+**What happens at capacity?** A ring overwrites its oldest entry and increments its overwrite count. Readers can miss entries and observe gaps; it does not block producers to preserve every log.
 
+**How do snapshots handle gaps?** They merge real retained IDs across locked rings. Counting how many records to skip and adding that count to a minimum ID is wrong when independently overwritten rings leave gaps.
 
----
+**Why is the original device array unsafe?** 64 records times 88 bytes is 5,632 bytes, larger than xv6's 4,096-byte kernel stack before other frames are considered. Retrieval now uses one allocated page.
 
-### 2. Demonstrate File Operations 
+**How does reader independence work?** Each open file has a cursor. Independent opens have separate files; `dup` and `fork` share one file/cursor. Reads commit the cursor only after successful copyout.
 
-**Action:**
-```bash
-$ ls
-$ ulog_tool
-```
+**Is this lock-free?** No. Atomic sequence allocation removes one spinlock but writers still lock their ring. Atomic instructions also contend for cache-line ownership.
 
-**Expected Output:**
-```
-Kernel Log (20+ entries):
-----------------------------------------
-[0] INFO CPU0 PID0: klog: logging subsystem initialized
-[1] INFO CPU0 PID1: exec: sh
-[2] INFO CPU0 PID1: fork: pid 1 created child 2
-[3] INFO CPU0 PID2: exec: ls
-[4] INFO CPU0 PID2: open: . fd=3
-[5] INFO CPU0 PID2: open: ./README fd=4
-[6] INFO CPU0 PID2: open: ./cat fd=4
-... (many file opens)
-[20] INFO CPU0 PID2: exit: pid 2 exiting
-```
+**Why RDTSC?** It provides a cheap raw cycle counter on this x86 target. It is not wall time, needs calibration for time units, and cannot be assumed synchronized across arbitrary physical CPUs. The benchmark serializes measurements and compares identical no-emission calls.
 
-*
+**Where is the next bottleneck?** Measure before deciding: the shared sequence counter, long reader critical sections, formatting/input validation, scheduler locks, and emulator scheduling all contribute. More CPUs may reduce throughput under QEMU.
 
----
+**What did you contribute?** State the inherited baseline and name your repairs, tests, and measurements. Start with the stack-safety bug, cursor semantics, sparse-sequence ordering, and measured sequence allocator comparison. Do not claim the original xv6 implementation or unmeasured hardware speedups.
 
-### 3. Show Error Handling 
-
-**Action:**
-```bash
-$ cat nonexistent_file
-$ ulog_tool
-```
-
-**Expected Output:**
-```
-[X] WARN CPU0 PID3: open: file not found nonexistent_file
-```
-
-
-
----
-
-### 4. Trace Complete Workflow
-
-**Action:**
-```bash
-$ cat README
-$ ulog_tool
-```
-
-**Expected Output:**
-```
-[X] INFO CPU0 PID1: fork: pid 1 created child 4
-[X+1] INFO CPU0 PID4: exec: cat
-[X+2] INFO CPU0 PID4: open: README fd=3
-[X+3] DEBUG CPU0 PID4: read: 512 bytes
-[X+4] DEBUG CPU0 PID4: read: 512 bytes
-[X+5] INFO CPU0 PID4: exit: pid 4 exiting
-```
-
-
-
----
-
-### 5. Run Test Suite
-
-**Action:**
-```bash
-$ klog_test
-```
-
-**Expected Output:**
-```
-=== Kernel Logging System Test ===
-
-Testing getklog() syscall...
-Retrieved 25 log entries:
-  [0] INFO CPU0 PID0: klog: logging subsystem initialized
-  [1] INFO CPU0 PID1: exec: sh
-  ...
-
-Testing /dev/klog device...
-  [0] INFO CPU0 PID0: klog: logging subsystem initialized
-  ...
-Read 5 entries from device
-
-=== Test Complete ===
-```
-
-
-
----
-
-
-
-## Advanced Demo
-
-### Show Multi-Process Activity
-```bash
-$ cat README & cat README & cat README
-$ ulog_tool
-```
-
-
-### Demonstrate Device Interface
-```bash
-$ mknod klog 2 2
-$ cat klog
-```
-
-
----
-
+**What would you improve for production?** A wider sequence/epoch ABI, access policy, bounded reader lock hold time, hardware timestamp calibration, and an explicit persistence/loss policy. These need separate requirements and tests.
