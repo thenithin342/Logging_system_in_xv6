@@ -80,7 +80,7 @@ main(void)
     wait();
   if(KLOG_MODE == 3 ? klogdropped() != dropped : klogdropped() <= dropped)
     goto fail;
-  printf(1, "KLOG STRESS PASS: 18000 writes, concurrent snapshots and readers, overwrites=%d\n",
+  printf(1, "KLOG STRESS PASS: 18000 writes, concurrent snapshots and readers, overwrites=%u\n",
          klogdropped()-dropped);
   exit();
 fail:

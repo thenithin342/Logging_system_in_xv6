@@ -3,6 +3,9 @@
 #include "user.h"
 #include "fcntl.h"
 
+_Static_assert(__builtin_types_compatible_p(__typeof__(klogdropped()), uint),
+               "overwrite counts use the full unsigned syscall word");
+
 static void
 check(int ok, char *what)
 {
@@ -20,6 +23,7 @@ main(void)
   char longmsg[65];
   char *guard = (char*)(((uint)&fd & ~4095U) - 4096);
   check(sizeof(a) == 88, "entry ABI");
+  printf(1, "KLOG UINT CHECK: %u\n", ~0U);
   check(getklog(entries, 0) == 0, "zero length");
   check(getklog(entries, -1) == -1, "negative length");
   check(getklog(entries, KLOG_MAX_ENTRIES+1) == -1, "explicit page limit");

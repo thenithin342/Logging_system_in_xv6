@@ -33,7 +33,7 @@ main(int argc, char *argv[])
   
   for(i = 0; i < count; i++){
     level = entries[i].level < 4 ? level_names[entries[i].level] : "?";
-    printf(1, "[%d] %s CPU%d PID%d: %s\n",
+    printf(1, "[%u] %s CPU%d PID%d: %s\n",
            entries[i].seq,
            level,
            entries[i].cpu,

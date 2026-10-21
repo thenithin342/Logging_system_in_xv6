@@ -122,7 +122,8 @@ def main():
                 with (destination / f"qemu-mode-{mode}-cpus-{cpus}.log").open("w") as log:
                     guest = Guest(cpus, log)
                     try:
-                        guest.command("klog_test", "KLOG TEST PASS")
+                        output = guest.command("klog_test", "KLOG TEST PASS")
+                        assert "KLOG UINT CHECK: 4294967295" in output, output
                         guest.command("klog_stress", "KLOG STRESS PASS")
                         print(f"PASS mode={mode} cpus={cpus}: guest assertions and stress", flush=True)
                         if args.benchmark:
