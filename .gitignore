@@ -1,3 +1,5 @@
 __pycache__/
 *.pyc
 benchmarks/build*.log
+artifacts/
+benchmarks/**/build*.log

@@ -70,38 +70,55 @@ class Guest:
         self.process.stdin.close()
         self.process.stdout.close()
 
-def build(mode):
-    with (ROOT / "benchmarks" / f"build-mode-{mode}.log").open("w") as log:
-        subprocess.run(["make", "-j4", f"KLOG_MODE={mode}", "fs.img", "xv6.img"],
-                       cwd=XV6, stdout=log, stderr=subprocess.STDOUT, check=True)
+def build(mode, capacity=256, destination=None):
+    destination = destination or ROOT / "artifacts" / "qemu"
+    destination.mkdir(parents=True, exist_ok=True)
+    path = destination / f"build-mode-{mode}.log"
+    with path.open("w") as log:
+        result = subprocess.run(["make", "-j4", f"KLOG_MODE={mode}",
+                                 f"KLOG_GLOBAL_CAPACITY={capacity}", "fs.img", "xv6.img"],
+                                cwd=XV6, stdout=log, stderr=subprocess.STDOUT)
+    if result.returncode:
+        print(path.read_text()[-8000:], flush=True)
+        result.check_returncode()
+
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--benchmark", action="store_true")
     parser.add_argument("--repeats", type=int, default=3)
     parser.add_argument("--cpus", type=int, nargs="+", default=[1, 2, 4, 8], choices=[1, 2, 4, 8])
+    parser.add_argument("--modes", type=int, nargs="+", choices=[0, 1, 2, 3])
+    parser.add_argument("--capacity-policy", choices=["legacy", "matched"], default="matched")
+    parser.add_argument("--output-dir", type=Path, default=ROOT / "artifacts" / "qemu")
     args = parser.parse_args()
-    if args.repeats < 1:
-        parser.error("--repeats must be positive")
-    destination = ROOT / "benchmarks"
-    destination.mkdir(exist_ok=True)
+    modes = args.modes if args.modes is not None else ([0, 1, 2] if args.benchmark else [0, 1, 2, 3])
+    if args.repeats < 1 or len(set(args.cpus)) != len(args.cpus) or len(set(modes)) != len(modes):
+        parser.error("repeats must be positive and CPU/mode lists must be unique")
+    if args.benchmark and 3 in modes:
+        parser.error("mode 3 is covered by smoke tests, not the emission benchmark")
+    destination = args.output_dir.resolve()
+    if destination == ROOT / "benchmarks" or (args.benchmark and (destination / "results.csv").exists()):
+        parser.error("choose a fresh output directory; published benchmark results are preserved")
+    destination.mkdir(parents=True, exist_ok=True)
     versions = {}
     for name, command in {"qemu": ["qemu-system-i386", "--version"],
                           "gcc": ["gcc", "--version"], "python": ["python3", "--version"]}.items():
         versions[name] = subprocess.check_output(command, text=True).splitlines()[0]
     versions.update(platform=platform.platform(), logical_host_cpus=os.cpu_count(),
                     accelerator="tcg,thread=multi", ram_mib=512,
-                    repeats=args.repeats, guest_cpus=args.cpus,
-                    benchmark=args.benchmark,
+                    repeats=args.repeats, guest_cpus=args.cpus, modes=modes,
+                    benchmark=args.benchmark, capacity_policy=args.capacity_policy,
                     source_sha256={str(path.relative_to(ROOT)): hashlib.sha256(path.read_bytes()).hexdigest()
                                    for path in list(XV6.glob("*.c")) + list(XV6.glob("*.h")) + [XV6 / "Makefile"]})
     (destination / "environment.json").write_text(json.dumps(versions, indent=2)+"\n")
     rows = []
-    modes = [0, 1, 2] if args.benchmark else [2]
+    complete = False
     try:
         for mode in modes:
-            build(mode)
             for cpus in args.cpus:
+                capacity = cpus*256 if mode == 0 and args.capacity_policy == "matched" else 256
+                build(mode, capacity, destination)
                 with (destination / f"qemu-mode-{mode}-cpus-{cpus}.log").open("w") as log:
                     guest = Guest(cpus, log)
                     try:
@@ -110,7 +127,6 @@ def main():
                         print(f"PASS mode={mode} cpus={cpus}: guest assertions and stress", flush=True)
                         if args.benchmark:
                             for run in range(1, args.repeats+1):
-                                # Alternate order to reduce systematic warmup bias.
                                 for enabled in ([0, 1] if run % 2 else [1, 0]):
                                     started = time.monotonic()
                                     output = guest.command(f"klog_bench {cpus} {enabled}", "BENCH mode=", 180)
@@ -119,6 +135,7 @@ def main():
                                     row = {key: int(value) for key, value in re.findall(r"(\w+)=(\d+)", match.group())}
                                     assert row["mode"] == mode and row["workers"] == cpus
                                     assert row["enabled"] == enabled and row["events"] == cpus*16384
+                                    assert row["capacity"] == (capacity if mode == 0 else cpus*256)
                                     assert row["ticks"] > 0 and row["mean_cycles"] > 0
                                     row.update(cpus=cpus, run=run)
                                     row["wall_seconds"] = round(wall_seconds, 6)
@@ -127,16 +144,17 @@ def main():
                                     print(f"  run={run} enabled={enabled} events/s={row['events_per_second']}", flush=True)
                     finally:
                         guest.close()
+        if args.benchmark:
+            assert len(rows) == len(modes)*len(args.cpus)*args.repeats*2
+        complete = True
     finally:
-        # Leave the normal, tested atomic-sequence build ready for a demo.
-        build(2)
+        build(2, 256, destination)
         if rows:
-            with (destination / "results.csv").open("w", newline="") as file:
+            filename = "results.csv" if complete else "results.partial.csv"
+            with (destination / filename).open("w", newline="") as file:
                 writer = csv.DictWriter(file, fieldnames=list(rows[0]))
                 writer.writeheader()
                 writer.writerows(rows)
-    if args.benchmark:
-        assert len(rows) == len(modes)*len(args.cpus)*args.repeats*2
     print("ALL QEMU CHECKS PASS", flush=True)
 
 if __name__ == "__main__":

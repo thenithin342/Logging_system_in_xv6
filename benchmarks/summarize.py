@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Validate the raw benchmark matrix and rebuild its summary and chart."""
+import argparse
 import csv
+import json
 from pathlib import Path
 import statistics
 
@@ -8,7 +10,14 @@ HERE = Path(__file__).resolve().parent
 LABELS = {0: "Global ring", 1: "Per-CPU + sequence lock", 2: "Per-CPU + atomic sequence"}
 
 def main():
-    with (HERE / "results.csv").open() as file:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--input-dir", type=Path, default=HERE)
+    parser.add_argument("--check-only", action="store_true")
+    args = parser.parse_args()
+    directory = args.input_dir.resolve()
+    metadata = json.loads((directory / "environment.json").read_text())
+    matched = metadata.get("capacity_policy") == "matched"
+    with (directory / "results.csv").open() as file:
         raw = list(csv.DictReader(file))
     groups = {}
     keys = set()
@@ -16,6 +25,9 @@ def main():
         for field in ("mode", "cpus", "workers", "enabled", "run", "events", "ticks",
                       "mean_cycles", "mean_worker_p95", "overwrites", "events_per_second"):
             row[field] = int(row[field])
+        expected_capacity = row["cpus"]*256 if matched or row["mode"] != 0 else 256
+        row["capacity"] = int(row.get("capacity", expected_capacity))
+        assert row["capacity"] == expected_capacity, "capacity policy mismatch"
         key = (row["mode"], row["cpus"], row["enabled"], row["run"])
         assert key not in keys, f"duplicate row: {key}"
         keys.add(key)
@@ -29,6 +41,7 @@ def main():
     repeats = {len(rows) for rows in groups.values()}
     assert len(repeats) == 1 and min(repeats) >= 3, "at least 3 runs per combination required"
     run_count = next(iter(repeats))
+    assert all({r["run"] for r in rows} == set(range(1, run_count+1)) for rows in groups.values())
     summary = []
     for (mode, cpus, enabled), rows in sorted(groups.items()):
         rates = [row["events_per_second"] for row in rows]
@@ -37,13 +50,21 @@ def main():
                             min_events_per_second=min(rates), max_events_per_second=max(rates),
                             median_mean_cycles=round(statistics.median(row["mean_cycles"] for row in rows)),
                             median_mean_worker_p95=round(statistics.median(row["mean_worker_p95"] for row in rows)),
-                            median_overwrites=round(statistics.median(row["overwrites"] for row in rows))))
-    with (HERE / "summary.csv").open("w", newline="") as file:
+                            median_overwrites=round(statistics.median(row["overwrites"] for row in rows)),
+                            active_capacity=rows[0]["capacity"],
+                            paired_wall_overhead_percent=round(statistics.median(
+                                (float(row["wall_seconds"])/float(next(control["wall_seconds"]
+                                 for control in groups[(mode, cpus, 0)] if control["run"] == row["run"]))-1)*100
+                                for row in rows), 2) if enabled else 0))
+    if args.check_only:
+        print(f"Validated {len(raw)} raw measurements and their capacity/control groups")
+        return
+    with (directory / "summary.csv").open("w", newline="") as file:
         writer = csv.DictWriter(file, fieldnames=list(summary[0]))
         writer.writeheader()
         writer.writerows(summary)
-    table = ["| Variant | CPUs | Events/s median (min–max) | Control events/s | Mean cycles | Mean worker P95 cycles | Overwrites |",
-             "| --- | ---: | ---: | ---: | ---: | ---: | ---: |"]
+    table = ["| Variant | CPUs | Events/s median (min–max) | Control events/s | Mean cycles | Mean worker P95 cycles | Overwrites | Active capacity | Paired wall overhead |",
+             "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |"]
     for row in summary:
         if row["enabled"] != 1:
             continue
@@ -51,8 +72,9 @@ def main():
         table.append(f"| {LABELS[row['mode']]} | {row['cpus']} | {row['median_events_per_second']:,} "
                      f"({row['min_events_per_second']:,}–{row['max_events_per_second']:,}) | "
                      f"{control['median_events_per_second']:,} | {row['median_mean_cycles']:,} | "
-                     f"{row['median_mean_worker_p95']:,} | {row['median_overwrites']:,} |")
-    (HERE / "table.md").write_text("\n".join(table)+"\n")
+                     f"{row['median_mean_worker_p95']:,} | {row['median_overwrites']:,} | "
+                     f"{row['active_capacity']:,} | {row['paired_wall_overhead_percent']:.2f}% |")
+    (directory / "table.md").write_text("\n".join(table)+"\n")
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
@@ -71,11 +93,11 @@ def main():
     ax.grid(axis="y", alpha=0.2)
     ax.spines[["top", "right"]].set_visible(False)
     ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.15), ncol=1, frameon=False)
-    fig.text(0.07, 0.025, f"QEMU TCG / Ubuntu WSL · 22 Oct 2026 · median and observed range of {run_count} runs\n"
-             "Includes syscall, validation, warmup and process lifecycle. Source: benchmarks/results.csv. No hardware speedup claim.", fontsize=8)
+    fig.text(0.07, 0.025, f"QEMU TCG · {'Matched active retention capacity' if matched else 'Historical unequal capacity'} · median and observed range of {run_count} runs\n"
+             "Includes syscall, validation, warmup and process lifecycle. Source: results.csv beside this chart. No hardware speedup claim.", fontsize=8)
     fig.subplots_adjust(left=0.12, right=0.97, top=0.9, bottom=0.32)
-    fig.savefig(HERE / "throughput.png")
-    fig.savefig(HERE / "throughput.svg")
+    fig.savefig(directory / "throughput.png")
+    fig.savefig(directory / "throughput.svg")
     plt.close(fig)
     print(f"Validated {len(raw)} measurements; wrote summary.csv, table.md, throughput.png/svg")
 
