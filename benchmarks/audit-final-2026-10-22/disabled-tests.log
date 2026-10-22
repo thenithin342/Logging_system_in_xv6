@@ -1,0 +1,5 @@
+PASS mode=3 cpus=1: guest assertions and stress
+PASS mode=3 cpus=2: guest assertions and stress
+PASS mode=3 cpus=4: guest assertions and stress
+PASS mode=3 cpus=8: guest assertions and stress
+ALL QEMU CHECKS PASS

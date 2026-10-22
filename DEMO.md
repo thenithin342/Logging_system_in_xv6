@@ -15,8 +15,10 @@ For a reproducible external run, use `python3 tests/run_host.py` and `python3 te
 
 ## Design notes
 
-Per-CPU rings partition write locking and storage. The global sequence counter still creates cross-CPU traffic, and consistent snapshots briefly lock all rings. Atomic sequence allocation removes one spinlock acquisition; ring updates remain protected by spinlocks.
+Per-CPU rings partition write locking and storage. The global sequence counter still creates cross-CPU traffic, and consistent snapshots briefly lock all rings. Bounded atomic CAS sequence allocation removes the shared sequence spinlock acquisition; ring updates remain protected by spinlocks.
 
 Each full ring overwrites its oldest entry and increments its overwrite count. Retrieval merges actual retained sequence IDs, so independently overwritten rings can leave gaps without breaking ordering. Independent opens have separate cursors; duplicated and inherited descriptors share the same cursor.
 
 Timestamps contain raw TSC values rather than calibrated wall time. The benchmark includes syscall and timing overhead, and its results describe the tested QEMU configuration. See [the technical report](PROJECT_REPORT.md) for synchronization details and [the benchmark report](benchmarks/README.md) for methodology and limitations.
+
+Sequence IDs stop safely at exhaustion rather than wrapping; active user writes then return an error. For current fair-comparison results, see [the capacity-matched report](benchmarks/audit-final-2026-10-22/README.md).

@@ -3,3 +3,4 @@ __pycache__/
 benchmarks/build*.log
 artifacts/
 benchmarks/**/build*.log
+.DS_Store

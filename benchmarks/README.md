@@ -1,15 +1,19 @@
-# Measured logging benchmark
+# Historical logging benchmark (pre-audit)
 
 Run date: **22 October 2026**. These measurements come from the actual xv6 guest under QEMU TCG in Ubuntu WSL, rather than from illustrative values. See `environment.json` for versions and source hashes, `results.csv` for every measurement, `summary.csv` for aggregates, and `qemu-mode-*-cpus-*.log` for the guest output. `validation.log` records the full test/benchmark run; `host-tests.log` records the sanitizer suite.
+
+The recorded code predates the final audit: mode 2 used fetch-and-add and mode 0 retained only 256 records. These files remain unchanged. The [current capacity-matched report](audit-final-2026-10-22/README.md) evaluates the audited code separately. The manifest in `historical-manifest.json` protects the original CSVs, plots, environment metadata, and transcripts.
 
 ## Reproduce
 
 From the repository root in Linux/WSL:
 
 ```sh
-python3 tests/run_host.py
-python3 tests/run_qemu.py --benchmark --repeats 3
-python3 benchmarks/summarize.py
+# Validate the historical dataset without rewriting it.
+python3 benchmarks/summarize.py --check-only
+# Measure the current code into a fresh directory.
+python3 tests/run_qemu.py --benchmark --capacity-policy matched --output-dir artifacts/benchmark
+python3 benchmarks/summarize.py --input-dir artifacts/benchmark
 ```
 
 Only the optional chart/report generation requires Matplotlib (`sudo apt-get install python3-matplotlib` on Ubuntu). The kernel and the test runner do not. The summarizer requires the full 1/2/4/8-CPU, three-variant matrix and at least three repetitions; it checks for duplicate or missing groups and validates event counts and wall-throughput calculations before generating output.

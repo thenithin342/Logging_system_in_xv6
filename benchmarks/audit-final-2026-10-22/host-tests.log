@@ -1,0 +1,10 @@
+HOST KLOG PASS: formatter, gaps, wraparound, cursors, 8 concurrent writers
+PASS host mode=0 capacity=256
+HOST KLOG PASS: formatter, gaps, wraparound, cursors, 8 concurrent writers
+PASS host mode=0 capacity=2048
+HOST KLOG PASS: formatter, gaps, wraparound, cursors, 8 concurrent writers
+PASS host mode=1 capacity=256
+HOST KLOG PASS: formatter, gaps, wraparound, cursors, 8 concurrent writers
+PASS host mode=2 capacity=256
+HOST KLOG PASS: build-time disabled mode
+PASS host mode=3 capacity=256
