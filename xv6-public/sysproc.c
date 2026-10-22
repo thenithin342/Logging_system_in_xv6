@@ -99,6 +99,7 @@ sys_getklog(void)
   int max_entries;
   struct klog_entry *kbuf;
   int count, i;
+  uint page, end;
   struct proc *curproc = myproc();
   
   // Get arguments
@@ -118,6 +119,11 @@ sys_getklog(void)
   if((uint)max_entries > (curproc->sz - (uint)buf_addr) / sizeof(struct klog_entry))
     return -1;
   
+  end = (uint)buf_addr + max_entries * sizeof(struct klog_entry) - 1;
+  for(page = PGROUNDDOWN((uint)buf_addr); page <= PGROUNDDOWN(end); page += PGSIZE)
+    if(uva2ka(curproc->pgdir, (char*)page) == 0)
+      return -1;
+
   // Allocate kernel buffer
   kbuf = (struct klog_entry*)kalloc();
   if(kbuf == 0)
@@ -157,7 +163,7 @@ sys_klogwrite(void)
     msg[i] = page[va % PGSIZE];
     if(msg[i] == 0){
       if(level >= 0)
-        klog_printf_level(level, "%s", msg);
+        return klog_printf_level(level, "%s", msg);
       return 0;
     }
   }

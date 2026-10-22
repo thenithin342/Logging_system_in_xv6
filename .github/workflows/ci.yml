@@ -1,0 +1,84 @@
+name: Kernel logging validation
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      full_benchmark:
+        description: Run the capacity-matched 1/2/4/8 CPU benchmark
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Install build and emulator prerequisites
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends build-essential binutils perl qemu-system-x86 python3 python3-matplotlib
+          mkdir -p artifacts
+      - name: Check documentation and historical evidence
+        run: python3 tests/check_artifacts.py
+      - name: Strict host tests with ASan and UBSan
+        run: python3 tests/run_host.py 2>&1 | tee artifacts/host.log
+      - name: Console and user integer boundary regressions
+        run: python3 tests/test_integer_format.py 2>&1 | tee artifacts/integer-format.log
+      - name: Clean x86 build and real guest tests in every mode
+        run: |
+          make -C xv6-public clean
+          python3 tests/run_qemu.py --cpus 1 2 --output-dir artifacts/ci-qemu 2>&1 | tee artifacts/guest.log
+      - name: Validate runner and reporting regression tests
+        run: python3 tests/test_tools.py
+      - name: Report failed validation
+        if: failure()
+        run: echo 'Kernel validation failed. Inspect the failed step and validation-logs artifact.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Save validation logs
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: validation-logs
+          path: artifacts/
+          retention-days: 14
+
+  benchmark:
+    if: github.event_name == 'workflow_dispatch' && inputs.full_benchmark
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Install benchmark prerequisites
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends build-essential binutils perl qemu-system-x86 python3 python3-matplotlib
+          mkdir -p artifacts
+      - name: Run repeated capacity-matched comparison
+        run: python3 tests/run_qemu.py --benchmark --capacity-policy matched --output-dir artifacts/benchmark 2>&1 | tee artifacts/benchmark.log
+      - name: Validate raw results and generate reports
+        run: python3 benchmarks/summarize.py --input-dir artifacts/benchmark
+      - name: Save benchmark evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: capacity-matched-benchmark
+          path: artifacts/
+          retention-days: 30

@@ -19,7 +19,7 @@ printint(int fd, int xx, int base, int sgn)
   neg = 0;
   if(sgn && xx < 0){
     neg = 1;
-    x = -xx;
+    x = 0U - (uint)xx;
   } else {
     x = xx;
   }
@@ -35,7 +35,7 @@ printint(int fd, int xx, int base, int sgn)
     putc(fd, buf[i]);
 }
 
-// Print to the given fd. Only understands %d, %x, %p, %s.
+// Print to the given fd. Only understands %d, %u, %x, %p, %s.
 void
 printf(int fd, const char *fmt, ...)
 {
@@ -54,8 +54,8 @@ printf(int fd, const char *fmt, ...)
         putc(fd, c);
       }
     } else if(state == '%'){
-      if(c == 'd'){
-        printint(fd, *ap, 10, 1);
+      if(c == 'd' || c == 'u'){
+        printint(fd, *ap, 10, c == 'd');
         ap++;
       } else if(c == 'x' || c == 'p'){
         printint(fd, *ap, 16, 0);

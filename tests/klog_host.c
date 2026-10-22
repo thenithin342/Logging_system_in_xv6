@@ -12,6 +12,7 @@ static void ordered(struct klog_entry *out, int n) {
 static void *writer(void *id) {
   test_cpu = (int)(uintptr_t)id;
   for(int i = 0; i < 10000; i++) klog_info("writer %d %d", test_cpu, i);
+  assert(interrupt_depth == 0);
   return 0;
 }
 
@@ -23,6 +24,16 @@ int main(void) {
   klog_init();
   klog_clear();
   assert(klog_snapshot(out, 1) == 0);
+  if(KLOG_MODE == 3){
+    assert(klog_info("disabled") == 0);
+    assert(klog_snapshot(out, KLOG_MAX_ENTRIES) == 0);
+    assert(klog_get_dropped() == 0);
+    struct file disabled = {0};
+    assert(klogdev_read(&disabled, 0, 88) == 0 && disabled.off == 0);
+    assert(klogdev_read(&disabled, 0, -1) == -1);
+    puts("HOST KLOG PASS: build-time disabled mode");
+    return 0;
+  }
   assert(klog_snapshot(out, 0) == 0);
   assert(klog_snapshot(out, -1) == 0);
   assert(snprintf_int(number, sizeof(number), (-2147483647-1)) == 11);
@@ -46,7 +57,8 @@ int main(void) {
   for(int i = 0; i < 20; i++) klog_info("old %d", i);
   test_cpu = 1;
   for(int i = 0; i < 1000; i++) klog_info("new %d", i);
-  assert(klog_get_dropped() == (KLOG_MODE == 0 ? 764 : 744));
+  assert(klog_get_dropped() == (KLOG_MODE == 0 ?
+         (1020 > KLOG_RING_SIZE ? 1020-KLOG_RING_SIZE : 0) : 744));
   assert(klog_snapshot(out, KLOG_MAX_ENTRIES) == KLOG_MAX_ENTRIES);
   ordered(out, KLOG_MAX_ENTRIES);
   assert(out[KLOG_MAX_ENTRIES-1].seq == global_seq-1);
@@ -81,15 +93,46 @@ int main(void) {
   fail_alloc = 0;
   fail_copy = 1;
   assert(klogdev_read(&f, 0, 88) == -1 && f.off == 0 && allocated == 0);
+  fail_copy = 2;
+  assert(klogdev_read(&f, 0, 88) == -1 && f.off == 0 && allocated == 0);
   fail_copy = 0;
+  uint expected = 0;
+  assert(klog_read_since(second, 1, &expected) == 1);
+  assert(klogdev_read(&f, 0, -1) == -1 && f.off == 0);
   assert(klogdev_read(&f, 0, 87) == -1);
   assert(klogdev_read(&f, 0, 0) == 0);
   assert(klogdev_read(&f, 0, 4096) == 88*KLOG_MAX_ENTRIES);
   assert(f.off > 0 && allocated == 0);
+  assert(((struct klog_entry*)copied)->seq == second[0].seq);
   klog_clear();
   assert(klogdev_read(&f, 0, 88) == 0 && allocated == 0);
   assert(klog_get_dropped() == 0);
   assert(klog_snapshot(out, 1) == 0);
+  for(uint i = 0; i < KLOG_RING_SIZE; i++) klog_info("full");
+  assert(cpu_logs[KLOG_MODE == 0 ? 0 : test_cpu].count == KLOG_RING_SIZE);
+  assert(klog_get_dropped() == 0);
+  for(int i = 0; i < 5; i++) klog_info("overwrite");
+  assert(klog_get_dropped() == 5);
+  klog_clear();
+  // Only 31 IDs remain; concurrent reservations must saturate, never wrap.
+  global_seq = KLOG_SEQ_EXHAUSTED - 31;
+  for(int i = 0; i < NCPU; i++)
+    assert(pthread_create(&threads[i], 0, writer, (void*)(uintptr_t)i) == 0);
+  for(int i = 0; i < NCPU; i++) assert(pthread_join(threads[i], 0) == 0);
+  assert(global_seq == KLOG_SEQ_EXHAUSTED);
+  n = klog_snapshot(out, KLOG_MAX_ENTRIES);
+  assert(n == 31);
+  ordered(out, n);
+  assert(out[n-1].seq == KLOG_SEQ_EXHAUSTED-1);
+  cursor = 0;
+  assert(klog_read_since(second, KLOG_MAX_ENTRIES, &cursor) == 31);
+  assert(cursor == KLOG_SEQ_EXHAUSTED);
+  assert(klog_read_since(second, KLOG_MAX_ENTRIES, &cursor) == 0);
+  assert(klog_info("exhausted") == -1);
+  klog_clear();
+  assert(klog_info("clear preserves exhaustion") == -1);
+  assert(klog_snapshot(out, KLOG_MAX_ENTRIES) == 0);
+  assert(interrupt_depth == 0 && allocated == 0);
   puts("HOST KLOG PASS: formatter, gaps, wraparound, cursors, 8 concurrent writers");
   return 0;
 }

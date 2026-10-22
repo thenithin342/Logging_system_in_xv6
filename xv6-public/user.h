@@ -29,7 +29,7 @@ int uptime(void);
 #include "klog.h"
 int getklog(struct klog_entry*, int);
 int klogwrite(int, const char*);
-int klogdropped(void);
+uint klogdropped(void);
 
 // ulib.c
 int stat(const char*, struct stat*);

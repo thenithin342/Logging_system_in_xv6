@@ -13,7 +13,7 @@
 #include "klog.h"
 
 // Per-CPU log buffers
-static struct klog_cpu_buf cpu_logs[NCPU];
+static struct klog_cpu_buf cpu_logs[KLOG_RING_COUNT];
 
 // Global sequence counter
 static uint global_seq = 1;
@@ -30,20 +30,26 @@ get_timestamp(uint *hi, uint *lo)
 }
 
 // Get next sequence number
+// Reserve UINT_MAX as the terminal cursor; stop rather than reusing IDs.
 static uint
 next_seq(void)
 {
-#if KLOG_MODE != 2
   uint seq;
-#endif
 #if KLOG_MODE == 2
-  return __sync_fetch_and_add(&global_seq, 1);
+  uint observed;
+  seq = __atomic_load_n(&global_seq, __ATOMIC_RELAXED);
+  for(;;){
+    if(seq == KLOG_SEQ_EXHAUSTED)
+      return 0;
+    observed = __sync_val_compare_and_swap(&global_seq, seq, seq + 1);
+    if(observed == seq)
+      return seq;
+    seq = observed;
+  }
 #else
   acquire(&seq_lock);
-  seq = global_seq++;
+  seq = global_seq == KLOG_SEQ_EXHAUSTED ? 0 : global_seq++;
   release(&seq_lock);
-#endif
-#if KLOG_MODE != 2
   return seq;
 #endif
 }
@@ -56,7 +62,7 @@ klog_init(void)
   
   initlock(&seq_lock, "klog_seq");
   
-  for(i = 0; i < NCPU; i++){
+  for(i = 0; i < KLOG_RING_COUNT; i++){
     initlock(&cpu_logs[i].lock, "klog_cpu");
     cpu_logs[i].head = 0;
     cpu_logs[i].count = 0;
@@ -129,27 +135,27 @@ snprintf_hex(char *buf, int size, uint val)
 }
 
 // Internal logging function with level
-static void
+static int
 klog_printf_internal(int level, const char *fmt, va_list ap)
 {
   int cpu_id;
   struct klog_cpu_buf *log;
   struct klog_entry *entry;
-  uint idx;
+  uint idx, seq;
   int pid = 0;
   char buf[64];
   int i;
   char *s;
   
   if(KLOG_MODE == 3)
-    return;
+    return 0;
 
   // Get current CPU
   pushcli();
   cpu_id = cpuid();
   if(cpu_id < 0 || cpu_id >= NCPU){
     popcli();
-    return;
+    return -1;
   }
   
   log = &cpu_logs[KLOG_MODE == 0 ? 0 : cpu_id];
@@ -197,10 +203,16 @@ klog_printf_internal(int level, const char *fmt, va_list ap)
   // Add entry to log buffer
   acquire(&log->lock);
   
-  idx = log->head % KLOG_BUF_SIZE;
+  seq = next_seq();
+  if(seq == 0){
+    release(&log->lock);
+    popcli();
+    return -1;
+  }
+  idx = log->head;
   entry = &log->entries[idx];
   
-  entry->seq = next_seq();
+  entry->seq = seq;
   get_timestamp(&entry->timestamp_hi, &entry->timestamp_lo);
   entry->cpu = cpu_id;
   entry->pid = pid;
@@ -213,14 +225,15 @@ klog_printf_internal(int level, const char *fmt, va_list ap)
     entry->msg[i] = buf[i];
   entry->msg[i] = 0;
   
-  log->head = (log->head + 1) % KLOG_BUF_SIZE;
-  if(log->count == KLOG_BUF_SIZE)
+  log->head = (log->head + 1) % KLOG_RING_SIZE;
+  if(log->count == KLOG_RING_SIZE)
     log->dropped++;
   else
     log->count++;
   
   release(&log->lock);
   popcli();
+  return 0;
 }
 
 // Log a formatted message (default INFO level)
@@ -234,13 +247,15 @@ klog_printf(const char *fmt, ...)
 }
 
 // Log a formatted message with specific level
-void
+int
 klog_printf_level(int level, const char *fmt, ...)
 {
   va_list ap;
+  int result;
   va_start(ap, fmt);
-  klog_printf_internal(level, fmt, ap);
+  result = klog_printf_internal(level, fmt, ap);
   va_end(ap);
+  return result;
 }
 
 // Lock order: CPU rings in ascending order, then (writers only) seq_lock.
@@ -249,7 +264,7 @@ static void
 lock_logs(void)
 {
   int i;
-  for(i = 0; i < NCPU; i++)
+  for(i = 0; i < KLOG_RING_COUNT; i++)
     acquire(&cpu_logs[i].lock);
 }
 
@@ -257,12 +272,12 @@ static void
 unlock_logs(void)
 {
   int i;
-  for(i = NCPU-1; i >= 0; i--)
+  for(i = KLOG_RING_COUNT-1; i >= 0; i--)
     release(&cpu_logs[i].lock);
 }
 
 // Merge actual retained sequences, including gaps from independent overwrites.
-// shortcut: uint sequence IDs last until wrap; reboot before 2^32 events.
+// UINT_MAX is a terminal cursor; published IDs never wrap.
 static int
 collect(struct klog_entry *buf, int max, uint *cursor)
 {
@@ -274,17 +289,17 @@ collect(struct klog_entry *buf, int max, uint *cursor)
   if(max > KLOG_MAX_ENTRIES)
     max = KLOG_MAX_ENTRIES;
   lock_logs();
-  for(cpu = 0; cpu < NCPU; cpu++)
+  for(cpu = 0; cpu < KLOG_RING_COUNT; cpu++)
     pos[cpu] = 0;
   while(count < max){
     best = -1;
     seq = cursor ? ~0U : 0;
-    for(cpu = 0; cpu < NCPU; cpu++){
+    for(cpu = 0; cpu < KLOG_RING_COUNT; cpu++){
       log = &cpu_logs[cpu];
       while(pos[cpu] < log->count){
-        index = cursor ? log->head + KLOG_BUF_SIZE - log->count + pos[cpu]
-                       : log->head + KLOG_BUF_SIZE - 1 - pos[cpu];
-        index %= KLOG_BUF_SIZE;
+        index = cursor ? log->head + KLOG_RING_SIZE - log->count + pos[cpu]
+                       : log->head + KLOG_RING_SIZE - 1 - pos[cpu];
+        index %= KLOG_RING_SIZE;
         if(cursor && log->entries[index].seq < *cursor){
           pos[cpu]++;
           continue;
@@ -300,9 +315,9 @@ collect(struct klog_entry *buf, int max, uint *cursor)
     if(best < 0)
       break;
     log = &cpu_logs[best];
-    index = cursor ? log->head + KLOG_BUF_SIZE - log->count + pos[best]
-                   : log->head + KLOG_BUF_SIZE - 1 - pos[best];
-    buf[count++] = log->entries[index % KLOG_BUF_SIZE];
+    index = cursor ? log->head + KLOG_RING_SIZE - log->count + pos[best]
+                   : log->head + KLOG_RING_SIZE - 1 - pos[best];
+    buf[count++] = log->entries[index % KLOG_RING_SIZE];
     pos[best]++;
   }
   if(cursor && count)
@@ -338,7 +353,7 @@ klog_clear(void)
   struct klog_cpu_buf *log;
   
   lock_logs();
-  for(cpu_id = 0; cpu_id < NCPU; cpu_id++){
+  for(cpu_id = 0; cpu_id < KLOG_RING_COUNT; cpu_id++){
     log = &cpu_logs[cpu_id];
     log->head = 0;
     log->count = 0;
@@ -355,12 +370,12 @@ klog_get_dropped(void)
   uint total = 0;
   struct klog_cpu_buf *log;
   
-  for(cpu_id = 0; cpu_id < NCPU; cpu_id++){
+  lock_logs();
+  for(cpu_id = 0; cpu_id < KLOG_RING_COUNT; cpu_id++){
     log = &cpu_logs[cpu_id];
-    acquire(&log->lock);
     total += log->dropped;
-    release(&log->lock);
   }
   
+  unlock_logs();
   return total;
 }

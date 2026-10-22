@@ -28,7 +28,8 @@ reader(int fd)
 int
 main(void)
 {
-  int fd, p[2], i, j, pid, workers = 8, dropped;
+  int fd, p[2], i, j, pid, workers = 8;
+  uint dropped;
   char ok, result[8];
   static struct klog_entry entries[KLOG_MAX_ENTRIES];
   mknod("klog", KLOG, 0);
@@ -77,9 +78,9 @@ main(void)
   close(p[0]);
   for(i = 0; i < workers; i++)
     wait();
-  if(klogdropped() <= dropped)
+  if(KLOG_MODE == 3 ? klogdropped() != dropped : klogdropped() <= dropped)
     goto fail;
-  printf(1, "KLOG STRESS PASS: 18000 writes, concurrent snapshots and readers, overwrites=%d\n",
+  printf(1, "KLOG STRESS PASS: 18000 writes, concurrent snapshots and readers, overwrites=%u\n",
          klogdropped()-dropped);
   exit();
 fail:

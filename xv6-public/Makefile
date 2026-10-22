@@ -80,7 +80,8 @@ OBJCOPY = $(TOOLPREFIX)objcopy
 OBJDUMP = $(TOOLPREFIX)objdump
 CFLAGS = -fno-pic -static -fno-builtin -fno-strict-aliasing -O2 -Wall -MD -ggdb -m32 -Werror -fno-omit-frame-pointer -Wno-array-bounds -Wno-infinite-recursion
 KLOG_MODE ?= 2
-CFLAGS += -DKLOG_MODE=$(KLOG_MODE)
+KLOG_GLOBAL_CAPACITY ?= 256
+CFLAGS += -DKLOG_MODE=$(KLOG_MODE) -DKLOG_GLOBAL_CAPACITY=$(KLOG_GLOBAL_CAPACITY)
 CFLAGS += $(shell $(CC) -fno-stack-protector -E -x c /dev/null >/dev/null 2>&1 && echo -fno-stack-protector)
 ASFLAGS = -m32 -gdwarf-2 -Wa,-divide
 # FreeBSD ld wants ``elf_i386_fbsd''
@@ -297,5 +298,8 @@ tar:
 .PHONY: klog-config
 klog-config:
 .klog-mode: klog-config
-	@printf '%s\n' '$(KLOG_MODE)' | cmp -s - .klog-mode || printf '%s\n' '$(KLOG_MODE)' > .klog-mode
-klog.o klog_bench.o: .klog-mode
+	@printf '%s\n' '$(KLOG_MODE):$(KLOG_GLOBAL_CAPACITY)' | cmp -s - .klog-mode || printf '%s\n' '$(KLOG_MODE):$(KLOG_GLOBAL_CAPACITY)' > .klog-mode
+klog.o klog_bench.o klog_test.o klog_stress.o: .klog-mode
+
+# Reject oversized logging frames without imposing new warnings on upstream xv6.
+klog.o klogdev.o: CFLAGS += -Wextra -Wno-sign-compare -Wframe-larger-than=1024

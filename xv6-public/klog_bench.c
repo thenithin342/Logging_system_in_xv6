@@ -7,13 +7,13 @@
 
 struct result { uint mean, p95; };
 
-static uint
+static unsigned long long
 cycles(void)
 {
-  uint lo, hi;
-  asm volatile("cpuid" : : "a"(0) : "ebx", "ecx", "edx", "memory");
+  uint lo, hi, leaf = 0;
+  asm volatile("cpuid" : "+a"(leaf) : : "ebx", "ecx", "edx", "memory");
   asm volatile("rdtsc" : "=a"(lo), "=d"(hi) : : "memory");
-  return lo;
+  return ((unsigned long long)hi << 32) | lo;
 }
 
 int
@@ -21,9 +21,10 @@ main(int argc, char **argv)
 {
   int workers = argc > 1 ? atoi(argv[1]) : 1;
   int enabled = argc > 2 ? atoi(argv[2]) : 1;
-  int start[2], out[2], i, j, pid, begin, elapsed, dropped;
+  int start[2], out[2], i, j, pid;
+  uint dropped, begin, elapsed;
   uint samples[SAMPLES], t, mean = 0, p95 = 0;
-  unsigned long long sum;
+  unsigned long long sum, started, interval;
   struct result r;
   char token = 1;
   if(workers < 1 || workers > 8 || (enabled != 0 && enabled != 1) ||
@@ -46,10 +47,15 @@ main(int argc, char **argv)
         klogwrite(enabled ? KLOG_INFO : -1, "benchmark event");
       for(j = 0; j < EVENTS; j++){
         if(j % (EVENTS/SAMPLES) == 0){
-          t = cycles();
+          started = cycles();
           if(klogwrite(enabled ? KLOG_INFO : -1, "benchmark event") < 0)
             exit();
-          samples[j/(EVENTS/SAMPLES)] = cycles() - t;
+          interval = cycles() - started;
+          if(interval > ~0U){
+            printf(1, "BENCH FAIL: timing sample exceeds 32-bit range\n");
+            exit();
+          }
+          samples[j/(EVENTS/SAMPLES)] = interval;
         } else if(klogwrite(enabled ? KLOG_INFO : -1, "benchmark event") < 0)
           exit();
       }
@@ -93,7 +99,7 @@ main(int argc, char **argv)
   close(out[0]);
   for(i = 0; i < workers; i++)
     wait();
-  printf(1, "BENCH mode=%d workers=%d enabled=%d events=%d ticks=%d mean_cycles=%d mean_worker_p95=%d overwrites=%d\n",
-         KLOG_MODE, workers, enabled, workers*EVENTS, elapsed, mean, p95, dropped);
+  printf(1, "BENCH mode=%d workers=%d enabled=%d events=%d capacity=%d ticks=%u mean_cycles=%u mean_worker_p95=%u overwrites=%u\n",
+         KLOG_MODE, workers, enabled, workers*EVENTS, KLOG_MODE == 0 ? KLOG_GLOBAL_CAPACITY : workers*KLOG_BUF_SIZE, elapsed, mean, p95, dropped);
   exit();
 }

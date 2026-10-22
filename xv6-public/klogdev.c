@@ -28,7 +28,7 @@ klogdev_read(struct file *f, char *dst, int n)
   uint cursor = f->off;
   if(n == 0)
     return 0;
-  if(n < sizeof(struct klog_entry))
+  if(n < (int)sizeof(struct klog_entry))
     return -1;
   if((entries = (struct klog_entry*)kalloc()) == 0)
     return -1;
@@ -46,5 +46,8 @@ klogdev_read(struct file *f, char *dst, int n)
 int
 klogdev_write(struct inode *ip, char *buf, int n)
 {
+  (void)ip;
+  (void)buf;
+  (void)n;
   return -1;
 }

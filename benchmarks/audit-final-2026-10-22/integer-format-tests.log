@@ -1,0 +1,2 @@
+PASS console.c: INT_MIN decimal and unsigned hex
+PASS printf.c: INT_MIN decimal and unsigned hex

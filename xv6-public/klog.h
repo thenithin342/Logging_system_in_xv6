@@ -15,7 +15,7 @@ struct klog_entry {
   char msg[64];       // Log message
 };
 
-#define KLOG_BUF_SIZE 256  // Per-CPU buffer size (must be power of 2)
+#define KLOG_BUF_SIZE 256  // Per-CPU retained records
 #define KLOG_MAX_ENTRIES (4096 / sizeof(struct klog_entry))
 #define KLOG_DEBUG 0
 #define KLOG_INFO  1
@@ -26,15 +26,33 @@ struct klog_entry {
 #define KLOG_MODE 2
 #endif
 
+#ifndef KLOG_GLOBAL_CAPACITY
+#define KLOG_GLOBAL_CAPACITY KLOG_BUF_SIZE
+#endif
+#if KLOG_MODE < 0 || KLOG_MODE > 3
+#error Unsupported KLOG_MODE
+#endif
+#if KLOG_GLOBAL_CAPACITY < 1 || KLOG_GLOBAL_CAPACITY > 2048
+#error KLOG_GLOBAL_CAPACITY must be between 1 and 2048
+#endif
+#if KLOG_MODE == 0
+#define KLOG_RING_COUNT 1
+#define KLOG_RING_SIZE KLOG_GLOBAL_CAPACITY
+#else
+#define KLOG_RING_COUNT NCPU
+#define KLOG_RING_SIZE KLOG_BUF_SIZE
+#endif
+#define KLOG_SEQ_EXHAUSTED (~0U)
+
 #ifndef KLOG_USER
 #include "spinlock.h"
 
 // Per-CPU log buffer
 struct klog_cpu_buf {
   struct spinlock lock;
-  struct klog_entry entries[KLOG_BUF_SIZE];
+  struct klog_entry entries[KLOG_RING_SIZE];
   uint head;          // Next write position
-  uint count;         // Retained entries, bounded by KLOG_BUF_SIZE
+  uint count;         // Retained entries, bounded by KLOG_RING_SIZE
   uint dropped;       // Count of dropped entries due to overflow
 };
 
@@ -42,7 +60,7 @@ struct klog_cpu_buf {
 // Kernel logging functions
 void klog_init(void);
 void klog_printf(const char *fmt, ...);
-void klog_printf_level(int level, const char *fmt, ...);
+int klog_printf_level(int level, const char *fmt, ...);
 int klog_snapshot(struct klog_entry *buf, int max_entries);
 int klog_read_since(struct klog_entry*, int, uint*);
 void klog_clear(void);

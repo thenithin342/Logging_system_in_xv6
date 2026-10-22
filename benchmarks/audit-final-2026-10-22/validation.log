@@ -1,0 +1,90 @@
+rm -f *.tex *.dvi *.idx *.aux *.log *.ind *.ilg \
+*.o *.d *.asm *.sym vectors.S bootblock entryother \
+initcode initcode.out kernel xv6.img fs.img kernelmemfs \
+xv6memfs.img mkfs .gdbinit .klog-mode \
+_cat _echo _forktest _grep _init _kill _klog_test _klog_stress _klog_bench _ln _ls _mkdir _rm _sh _stressfs _ulog_tool _usertests _wc _zombie 
+PASS mode=0 cpus=1: guest assertions and stress
+  run=1 enabled=0 events/s=31277
+  run=1 enabled=1 events/s=13674
+  run=2 enabled=1 events/s=14978
+  run=2 enabled=0 events/s=28766
+  run=3 enabled=0 events/s=26446
+  run=3 enabled=1 events/s=17284
+PASS mode=0 cpus=2: guest assertions and stress
+  run=1 enabled=0 events/s=38807
+  run=1 enabled=1 events/s=24655
+  run=2 enabled=1 events/s=25639
+  run=2 enabled=0 events/s=40927
+  run=3 enabled=0 events/s=41533
+  run=3 enabled=1 events/s=24526
+PASS mode=0 cpus=4: guest assertions and stress
+  run=1 enabled=0 events/s=32762
+  run=1 enabled=1 events/s=20001
+  run=2 enabled=1 events/s=19434
+  run=2 enabled=0 events/s=32915
+  run=3 enabled=0 events/s=31260
+  run=3 enabled=1 events/s=21156
+PASS mode=0 cpus=8: guest assertions and stress
+  run=1 enabled=0 events/s=20369
+  run=1 enabled=1 events/s=11650
+  run=2 enabled=1 events/s=12336
+  run=2 enabled=0 events/s=22677
+  run=3 enabled=0 events/s=22084
+  run=3 enabled=1 events/s=11454
+PASS mode=1 cpus=1: guest assertions and stress
+  run=1 enabled=0 events/s=34207
+  run=1 enabled=1 events/s=19229
+  run=2 enabled=1 events/s=18872
+  run=2 enabled=0 events/s=35033
+  run=3 enabled=0 events/s=32682
+  run=3 enabled=1 events/s=19695
+PASS mode=1 cpus=2: guest assertions and stress
+  run=1 enabled=0 events/s=37626
+  run=1 enabled=1 events/s=23149
+  run=2 enabled=1 events/s=24618
+  run=2 enabled=0 events/s=41338
+  run=3 enabled=0 events/s=42417
+  run=3 enabled=1 events/s=24860
+PASS mode=1 cpus=4: guest assertions and stress
+  run=1 enabled=0 events/s=29614
+  run=1 enabled=1 events/s=17295
+  run=2 enabled=1 events/s=19212
+  run=2 enabled=0 events/s=33389
+  run=3 enabled=0 events/s=32247
+  run=3 enabled=1 events/s=18449
+PASS mode=1 cpus=8: guest assertions and stress
+  run=1 enabled=0 events/s=19030
+  run=1 enabled=1 events/s=12788
+  run=2 enabled=1 events/s=10928
+  run=2 enabled=0 events/s=20545
+  run=3 enabled=0 events/s=16810
+  run=3 enabled=1 events/s=12649
+PASS mode=2 cpus=1: guest assertions and stress
+  run=1 enabled=0 events/s=24989
+  run=1 enabled=1 events/s=27108
+  run=2 enabled=1 events/s=25320
+  run=2 enabled=0 events/s=28300
+  run=3 enabled=0 events/s=33210
+  run=3 enabled=1 events/s=28871
+PASS mode=2 cpus=2: guest assertions and stress
+  run=1 enabled=0 events/s=59338
+  run=1 enabled=1 events/s=30181
+  run=2 enabled=1 events/s=38816
+  run=2 enabled=0 events/s=60504
+  run=3 enabled=0 events/s=60973
+  run=3 enabled=1 events/s=43400
+PASS mode=2 cpus=4: guest assertions and stress
+  run=1 enabled=0 events/s=33264
+  run=1 enabled=1 events/s=35688
+  run=2 enabled=1 events/s=34762
+  run=2 enabled=0 events/s=49939
+  run=3 enabled=0 events/s=50647
+  run=3 enabled=1 events/s=38698
+PASS mode=2 cpus=8: guest assertions and stress
+  run=1 enabled=0 events/s=19022
+  run=1 enabled=1 events/s=14045
+  run=2 enabled=1 events/s=12275
+  run=2 enabled=0 events/s=18276
+  run=3 enabled=0 events/s=17903
+  run=3 enabled=1 events/s=12066
+ALL QEMU CHECKS PASS

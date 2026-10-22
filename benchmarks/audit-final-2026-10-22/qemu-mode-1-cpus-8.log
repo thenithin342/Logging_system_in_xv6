@@ -1,0 +1,37 @@
+c[?7l[2J[0mSeaBIOS (version 1.16.3-debian-1.16.3-2)
+
+
+iPXE (https://ipxe.org) 00:03.0 CA00 PCI2.10 PnP PMM+1EFCAF60+1EF0AF60 CA00
+Press Ctrl-B to configure iPXE (PCI 00:03.0)...                                                                               
+
+
+Booting from Hard Disk..xv6...
+klog: detected 8 CPUs
+cpu1: starting 1
+cpu2: starting 2
+cpu3: starting 3
+cpu4: starting 4
+cpu5: starting 5
+cpu6: starting 6
+cpu7: starting 7
+cpu0: starting 0
+sb: size 1000 nblocks 941 ninodes 200 nlog 30 logstart 2 inodestart 32 bmap start 58
+init: starting sh
+$ klog_test
+KLOG UINT CHECK: 4294967295
+KLOG TEST PASS
+$ klog_stress
+KLOG STRESS PASS: 18000 writes, concurrent snapshots and readers, overwrites=15996
+$ klog_bench 8 0
+BENCH mode=1 workers=8 enabled=0 events=131072 capacity=2048 ticks=655 mean_cycles=1021219 mean_worker_p95=2360855 overwrites=7
+$ klog_bench 8 1
+BENCH mode=1 workers=8 enabled=1 events=131072 capacity=2048 ticks=992 mean_cycles=1559134 mean_worker_p95=3189092 overwrites=133127
+$ klog_bench 8 1
+BENCH mode=1 workers=8 enabled=1 events=131072 capacity=2048 ticks=1164 mean_cycles=1850533 mean_worker_p95=4040654 overwrites=133127
+$ klog_bench 8 0
+BENCH mode=1 workers=8 enabled=0 events=131072 capacity=2048 ticks=606 mean_cycles=911032 mean_worker_p95=1983594 overwrites=7
+$ klog_bench 8 0
+BENCH mode=1 workers=8 enabled=0 events=131072 capacity=2048 ticks=694 mean_cycles=1103019 mean_worker_p95=2355866 overwrites=7
+$ klog_bench 8 1
+BENCH mode=1 workers=8 enabled=1 events=131072 capacity=2048 ticks=1001 mean_cycles=1651589 mean_worker_p95=3125408 overwrites=133127
+$ 
